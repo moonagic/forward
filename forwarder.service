@@ -1,0 +1,33 @@
+[Unit]
+Description=Go Port Forwarder Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# It is strongly recommended not to run as the root user.
+# You should create a dedicated unprivileged user to run this service.
+# Example: sudo useradd --system --no-create-home --shell /bin/false forwarder-user
+User=forwarder-user
+Group=forwarder-user
+
+# The working directory for the application.
+# The executable and config.yml should be placed here.
+# Example: /etc/forwarder/
+WorkingDirectory=/etc/forwarder
+
+# The full path to the executable.
+ExecStart=/usr/local/bin/forwarder
+
+# Ensure the service always restarts on failure.
+Restart=on-failure
+RestartSec=5s
+
+# Limit the number of open file descriptors (optional, but recommended).
+LimitNOFILE=65536
+
+# Redirect log output to the systemd journal.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
