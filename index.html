@@ -214,7 +214,7 @@
                 return;
             }
 
-            const newConfig = { admin_addr: currentConfig.admin_addr, forwards: newForwards };
+            const newConfig = { admin_addr: currentConfig.admin_addr, basic_auth: currentConfig.basic_auth, forwards: newForwards };
 
             try {
                 saveConfigBtn.disabled = true;
