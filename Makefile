@@ -4,7 +4,7 @@ GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTIDY=$(GOCMD) mod tidy
 GORUN=$(GOCMD) run
-BINARY_NAME=forwarder
+BINARY_NAME=forward
 
 .DEFAULT_GOAL := help
 
