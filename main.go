@@ -25,8 +25,14 @@ const configPath = "config.yml"
 
 // --- Data Structures ---
 
+type BasicAuth struct {
+	Username string `yaml:"username" json:"username"`
+	Password string `yaml:"password" json:"password"`
+}
+
 type Config struct {
 	AdminAddr string    `yaml:"admin_addr" json:"admin_addr"`
+	BasicAuth BasicAuth `yaml:"basic_auth" json:"basic_auth"`
 	Forwards  []Forward `yaml:"forwards" json:"forwards"`
 }
 
@@ -114,6 +120,22 @@ func (m *ForwarderManager) StopAll() {
 
 // --- Web Admin Handlers ---
 
+func basicAuth(handler http.HandlerFunc, username, password string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if username == "" || password == "" {
+			handler(w, r)
+			return
+		}
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != username || pass != password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Unauthorized.", http.StatusUnauthorized)
+			return
+		}
+		handler(w, r)
+	}
+}
+
 func configHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -130,16 +152,19 @@ func getConfig(w http.ResponseWriter, r *http.Request) {
 	defer manager.mu.Unlock()
 
 	var adminAddr string
+	var basicAuth BasicAuth
 	yamlFile, err := os.ReadFile(configPath)
 	if err == nil {
 		var fileConfig Config
 		if yaml.Unmarshal(yamlFile, &fileConfig) == nil {
 			adminAddr = fileConfig.AdminAddr
+			basicAuth = fileConfig.BasicAuth
 		}
 	}
 
 	config := Config{
 		AdminAddr: adminAddr,
+		BasicAuth: basicAuth,
 		Forwards:  manager.currentForwards,
 	}
 
@@ -195,17 +220,20 @@ func postConfig(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Config saved and reloaded successfully."))
 }
 
-func startAdminServer(addr string) {
+func startAdminServer(addr string, auth BasicAuth) {
 	if addr == "" {
 		log.Println("admin_addr not configured, web admin interface not started.")
 		return
 	}
 
-	http.HandleFunc("/api/config", configHandler)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	configHandlerWithAuth := basicAuth(configHandler, auth.Username, auth.Password)
+	rootHandlerWithAuth := basicAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(indexHTML)
-	})
+	}, auth.Username, auth.Password)
+
+	http.HandleFunc("/api/config", configHandlerWithAuth)
+	http.HandleFunc("/", rootHandlerWithAuth)
 
 	log.Printf("Starting web admin interface, listening on http://%s", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
@@ -234,7 +262,7 @@ func main() {
 		log.Fatalln("One or more ports are unavailable, exiting.")
 	}
 
-	go startAdminServer(config.AdminAddr)
+	go startAdminServer(config.AdminAddr, config.BasicAuth)
 
 	manager.mu.Lock()
 	manager.StartForwarders(config.Forwards)
