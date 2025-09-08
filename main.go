@@ -191,27 +191,38 @@ func postConfig(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Config saved and reloaded successfully."))
 }
 
+// getClientIP extracts the client's IP address from the request, prioritizing proxy headers.
+func getClientIP(r *http.Request) string {
+	// Check X-Real-IP header first, which is often set by reverse proxies.
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+
+	// Then check X-Forwarded-For header.
+	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+		// X-Forwarded-For can be a comma-separated list of IPs. The first one is the original client.
+		return strings.Split(forwardedFor, ",")[0]
+	}
+
+	// Fallback to the standard RemoteAddr.
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// If SplitHostPort fails, it might be just an IP without a port.
+		return r.RemoteAddr
+	}
+	return ip
+}
+
 func allowMyIPHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Extract IP address
-	ipStr, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		// Fallback for environments without a port
-		ipStr = r.RemoteAddr
-	}
-
-	// Handle proxy headers
-	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
-		ipStr = strings.Split(forwardedFor, ",")[0]
-	}
-
+	ipStr := getClientIP(r)
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
-		http.Error(w, "Could not parse IP address", http.StatusBadRequest)
+		http.Error(w, "Could not parse IP address: "+ipStr, http.StatusBadRequest)
 		return
 	}
 
@@ -309,18 +320,7 @@ func startAdminServer(addr string, auth BasicAuth) {
 	}, auth.Username, auth.Password)
 
 	ipHandler := func(w http.ResponseWriter, r *http.Request) {
-		// Extract IP address
-		ipStr, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			// Fallback for environments without a port
-			ipStr = r.RemoteAddr
-		}
-
-		// Handle proxy headers
-		if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
-			ipStr = strings.Split(forwardedFor, ",")[0]
-		}
-
+		ipStr := getClientIP(r)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"ip": ipStr})
 	}
