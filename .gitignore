@@ -31,5 +31,6 @@ go.work.sum
 # .idea/
 .vscode/
 
+config.yml
 bin/
 __debug*

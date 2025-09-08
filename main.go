@@ -182,9 +182,88 @@ func postConfig(w http.ResponseWriter, r *http.Request) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
+	if err := reloadConfigAndForwarders(newConfig); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Config saved and reloaded successfully."))
+}
+
+func allowMyIPHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract IP address
+	ipStr, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// Fallback for environments without a port
+		ipStr = r.RemoteAddr
+	}
+
+	// Handle proxy headers
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		ipStr = strings.Split(forwardedFor, ",")[0]
+	}
+
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		http.Error(w, "Could not parse IP address", http.StatusBadRequest)
+		return
+	}
+
+	// Create /24 subnet
+	ipNet := net.IPNet{IP: ip.Mask(net.CIDRMask(24, 32)), Mask: net.CIDRMask(24, 32)}
+	cidrStr := ipNet.String()
+
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
+	// Read current config
+	yamlFile, err := os.ReadFile(configPath)
+	if err != nil {
+		http.Error(w, "Failed to read config file", http.StatusInternalServerError)
+		return
+	}
+	var currentConfig Config
+	if err := yaml.Unmarshal(yamlFile, &currentConfig); err != nil {
+		http.Error(w, "Failed to parse config file", http.StatusInternalServerError)
+		return
+	}
+
+	// Add IP to all rules
+	for i := range currentConfig.Forwards {
+		found := false
+		for _, allowedIP := range currentConfig.Forwards[i].AllowedIPs {
+			if allowedIP == cidrStr {
+				found = true
+				break
+			}
+		}
+		if !found {
+			currentConfig.Forwards[i].AllowedIPs = append(currentConfig.Forwards[i].AllowedIPs, cidrStr)
+		}
+	}
+
+	if err := reloadConfigAndForwarders(currentConfig); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Added %s to all allowed IP lists and reloaded configuration.", cidrStr)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("Successfully added %s to all rules.", cidrStr)))
+}
+
+// reloadConfigAndForwarders stops, checks, saves, and starts the forwarders.
+// The manager's mutex must be held by the caller.
+func reloadConfigAndForwarders(newConfig Config) error {
 	oldForwards := manager.currentForwards
 
-	log.Println("Received config update request, stopping current services to check ports...")
+	log.Println("Received config update, stopping current services to check ports...")
 	manager.StopAll()
 
 	if errs := checkPortsAvailability(newConfig.Forwards); len(errs) > 0 {
@@ -194,8 +273,7 @@ func postConfig(w http.ResponseWriter, r *http.Request) {
 		for _, err := range errs {
 			errMsgs = append(errMsgs, err.Error())
 		}
-		http.Error(w, "New config contains unavailable ports: "+strings.Join(errMsgs, ", "), http.StatusBadRequest)
-		return
+		return fmt.Errorf("new config contains unavailable ports: %s", strings.Join(errMsgs, ", "))
 	}
 
 	log.Println("New config port check successful, applying...")
@@ -203,21 +281,18 @@ func postConfig(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("Rollback: Failed to marshal new config to YAML", err)
 		manager.StartForwarders(oldForwards)
-		http.Error(w, "Failed to convert to YAML: "+err.Error(), http.StatusInternalServerError)
-		return
+		return fmt.Errorf("failed to convert to YAML: %w", err)
 	}
 
 	if err := os.WriteFile(configPath, yamlData, 0644); err != nil {
 		log.Println("Rollback: Failed to write config file", err)
 		manager.StartForwarders(oldForwards)
-		http.Error(w, "Failed to write config file: "+err.Error(), http.StatusInternalServerError)
-		return
+		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	manager.StartForwarders(newConfig.Forwards)
 	log.Println("Configuration successfully updated and reloaded.")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Config saved and reloaded successfully."))
+	return nil
 }
 
 func startAdminServer(addr string, auth BasicAuth) {
@@ -227,12 +302,32 @@ func startAdminServer(addr string, auth BasicAuth) {
 	}
 
 	configHandlerWithAuth := basicAuth(configHandler, auth.Username, auth.Password)
+	allowMyIPHandlerWithAuth := basicAuth(allowMyIPHandler, auth.Username, auth.Password)
 	rootHandlerWithAuth := basicAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(indexHTML)
 	}, auth.Username, auth.Password)
 
+	ipHandler := func(w http.ResponseWriter, r *http.Request) {
+		// Extract IP address
+		ipStr, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			// Fallback for environments without a port
+			ipStr = r.RemoteAddr
+		}
+
+		// Handle proxy headers
+		if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+			ipStr = strings.Split(forwardedFor, ",")[0]
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"ip": ipStr})
+	}
+
 	http.HandleFunc("/api/config", configHandlerWithAuth)
+	http.HandleFunc("/api/allow-my-ip", allowMyIPHandlerWithAuth)
+	http.HandleFunc("/api/ip", basicAuth(ipHandler, auth.Username, auth.Password))
 	http.HandleFunc("/", rootHandlerWithAuth)
 
 	log.Printf("Starting web admin interface, listening on http://%s", addr)

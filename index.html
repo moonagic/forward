@@ -84,9 +84,12 @@
                 <i class="bi bi-hdd-network-fill text-primary"></i>
                 Port Forwarder
             </a>
-            <button id="theme-switcher" class="btn border-0">
-                <i class="bi bi-sun-fill"></i>
-            </button>
+            <div class="d-flex align-items-center">
+                <span id="client-ip" class="navbar-text me-3 text-muted fs-sm"></span>
+                <button id="theme-switcher" class="btn border-0">
+                    <i class="bi bi-sun-fill"></i>
+                </button>
+            </div>
         </div>
     </nav>
 
@@ -97,6 +100,7 @@
             <div class="d-grid d-md-flex gap-2">
                 <button id="add-rule" class="btn btn-primary"><i class="bi bi-plus-circle-fill me-2"></i>Add
                     Rule</button>
+                <button id="allow-my-ip" class="btn btn-info"><i class="bi bi-person-check-fill me-2"></i>Allow My IP Range</button>
                 <button id="save-config" class="btn btn-success"><i class="bi bi-check-circle-fill me-2"></i>Save and
                     Apply</button>
             </div>
@@ -124,6 +128,7 @@
             const rulesContainer = document.getElementById('rules-container');
             const addRuleBtn = document.getElementById('add-rule');
             const saveConfigBtn = document.getElementById('save-config');
+            const allowMyIpBtn = document.getElementById('allow-my-ip');
             const themeSwitcherBtn = document.getElementById('theme-switcher');
             const htmlEl = document.documentElement;
 
@@ -132,6 +137,21 @@
             const bsToast = new bootstrap.Toast(toastEl);
 
             let currentConfig = {};
+
+            // --- IP Fetching ---
+            const fetchAndDisplayIP = async () => {
+                try {
+                    const response = await fetch('/api/ip');
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    const ipEl = document.getElementById('client-ip');
+                    if (data.ip) {
+                        ipEl.innerHTML = `<i class="bi bi-pc-display-horizontal"></i> <strong>Your IP:</strong> ${data.ip}`;
+                    }
+                } catch (error) {
+                    console.error('Error fetching IP:', error);
+                }
+            };
 
             // --- Theme Management ---
             const getStoredTheme = () => localStorage.getItem('theme');
@@ -333,7 +353,36 @@
 
             saveConfigBtn.addEventListener('click', saveConfig);
 
+            allowMyIpBtn.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to add your IP range (/24) to all rules?')) {
+                    return;
+                }
+
+                try {
+                    allowMyIpBtn.disabled = true;
+                    allowMyIpBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
+
+                    const response = await fetch('/api/allow-my-ip', {
+                        method: 'POST',
+                    });
+
+                    const responseText = await response.text();
+                    if (!response.ok) {
+                        throw new Error(`Failed to allow IP range: ${responseText}`);
+                    }
+
+                    showToast(responseText);
+                    loadConfig(); // Refresh the config to show the new IP
+                } catch (error) {
+                    showToast(error.message, true);
+                } finally {
+                    allowMyIpBtn.disabled = false;
+                    allowMyIpBtn.innerHTML = '<i class="bi bi-person-check-fill me-2"></i>Allow My IP Range';
+                }
+            });
+
             loadConfig();
+            fetchAndDisplayIP();
         });
     </script>
 </body>
