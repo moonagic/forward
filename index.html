@@ -3,7 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f8f9fa">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Port Forwarder Configuration</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -14,62 +17,723 @@
             --bs-body-bg-rgb: 248, 249, 250;
             --primary-rgb: 13, 110, 253;
             --card-bg-rgb: 255, 255, 255;
+            --glassmorphism-bg: rgba(255, 255, 255, 0.1);
+            --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
 
         [data-bs-theme="dark"] {
             --bs-body-bg-rgb: 10, 14, 24;
             --primary-rgb: 110, 168, 253;
             --card-bg-rgb: 23, 28, 42;
+            --glassmorphism-bg: rgba(0, 0, 0, 0.2);
+            --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            background-color: rgb(var(--bs-body-bg-rgb));
-            transition: background-color 0.3s ease;
-            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg,
+                rgb(var(--bs-body-bg-rgb)) 0%,
+                rgba(var(--primary-rgb), 0.05) 100%);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding-top: calc(70px + env(safe-area-inset-top));
         }
 
         .navbar {
-            background-color: rgba(var(--card-bg-rgb), 0.8);
-            backdrop-filter: blur(10px);
+            background: var(--glassmorphism-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
+            position: -webkit-sticky;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+            padding-top: env(safe-area-inset-top);
+            margin-top: calc(-1 * env(safe-area-inset-top));
+        }
+
+        /* iOS Safari specific status bar fix */
+        @supports (-webkit-touch-callout: none) {
+            body {
+                padding-top: calc(70px + env(safe-area-inset-top));
+            }
+
+            .navbar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                padding-top: env(safe-area-inset-top);
+                padding-left: max(1rem, env(safe-area-inset-left));
+                padding-right: max(1rem, env(safe-area-inset-right));
+            }
+
+            /* Force dark status bar area background */
+            .navbar::before {
+                content: '';
+                position: absolute;
+                top: calc(-1 * env(safe-area-inset-top));
+                left: 0;
+                right: 0;
+                height: env(safe-area-inset-top);
+                background: var(--glassmorphism-bg);
+                z-index: -1;
+            }
+        }
+
+        /* Ensure dark mode has deep enough background */
+        [data-bs-theme="dark"] .navbar {
+            background: rgba(10, 14, 24, 0.95);
+        }
+
+        [data-bs-theme="dark"] .navbar::before {
+            background: rgba(10, 14, 24, 0.95);
+        }
+
+        .navbar .container {
+            padding-left: max(1rem, env(safe-area-inset-left));
+            padding-right: max(1rem, env(safe-area-inset-right));
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         .card {
-            background-color: rgb(var(--card-bg-rgb));
-            border: 1px solid rgba(var(--primary-rgb), 0.1);
-            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            background: var(--glassmorphism-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
+            border-radius: 16px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-light);
+            overflow: hidden;
         }
 
         .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 .5rem 1.5rem rgba(var(--primary-rgb), 0.15) !important;
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(var(--primary-rgb), 0.2);
+            border-color: rgba(var(--primary-rgb), 0.3);
+        }
+
+        .btn {
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        /* Mobile button override */
+        @media (max-width: 767.98px) {
+            .btn {
+                border-radius: 8px;
+            }
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
         }
 
         .btn-delete {
             position: absolute;
             top: 1rem;
             right: 1rem;
-            width: 2.5rem;
-            height: 2.5rem;
+            width: 3rem;
+            height: 3rem;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 50%;
+            z-index: 10;
+            flex-shrink: 0;
+            min-width: 3rem;
+            min-height: 3rem;
+            max-width: 3rem;
+            max-height: 3rem;
         }
 
         .rule-card-enter {
-            animation: rule-enter 0.5s ease-out;
+            animation: rule-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         @keyframes rule-enter {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(30px) scale(0.95);
             }
-
             to {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0) scale(1);
             }
+        }
+
+        /* Responsive Container */
+        .container {
+            max-width: 100%;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        @media (min-width: 576px) {
+            .container { max-width: 540px; }
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                max-width: 720px;
+                padding-left: 1.5rem;
+                padding-right: 1.5rem;
+            }
+        }
+
+        @media (min-width: 992px) {
+            .container { max-width: 960px; }
+        }
+
+        @media (min-width: 1200px) {
+            .container { max-width: 1140px; }
+        }
+
+        @media (min-width: 1400px) {
+            .container { max-width: 1320px; }
+        }
+
+        /* Mobile-first responsive design */
+        @media (max-width: 767.98px) {
+            body {
+                padding-top: calc(68px + env(safe-area-inset-top));
+            }
+
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+
+            .btn-delete {
+                width: 2.5rem !important;
+                height: 2.5rem !important;
+                top: 0.75rem;
+                right: 0.75rem;
+                min-width: 2.5rem !important;
+                min-height: 2.5rem !important;
+                max-width: 2.5rem !important;
+                max-height: 2.5rem !important;
+                border-radius: 50% !important;
+                flex-shrink: 0 !important;
+                padding: 0 !important;
+                line-height: 1 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+
+            .card-body {
+                padding: 1rem;
+            }
+
+            .fs-sm {
+                font-size: 0.8rem !important;
+            }
+
+            .btn-group-mobile {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .btn-group-mobile .btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .input-group-mobile {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .input-group-mobile .form-control {
+                border-radius: 12px !important;
+                margin-bottom: 0.5rem;
+                width: 100% !important;
+                flex: none;
+                height: 44px !important;
+            }
+
+            .input-group-mobile .btn {
+                border-radius: 12px !important;
+                width: 100%;
+                flex: none;
+                height: 44px !important;
+                min-height: 44px !important;
+                max-height: 44px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                flex-shrink: 0 !important;
+            }
+
+            /* Override Bootstrap input-group behavior on mobile */
+            .input-group-mobile.input-group {
+                display: flex;
+                flex-wrap: wrap;
+            }
+
+            .input-group-mobile.input-group > * {
+                width: 100% !important;
+                flex: none !important;
+            }
+
+            /* Force button height controls for mobile - ALL BUTTONS */
+            .remove-ip-btn,
+            .input-group-mobile .btn,
+            .rule .input-group .btn {
+                height: 44px !important;
+                max-height: 44px !important;
+                min-height: 44px !important;
+                border-radius: 8px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                flex-shrink: 0 !important;
+                padding: 0.5rem 1rem !important;
+                font-size: 0.875rem !important;
+                gap: 0.5rem !important;
+            }
+
+            /* Style remove buttons specifically */
+            .remove-ip-btn {
+                background-color: var(--bs-danger) !important;
+                border-color: var(--bs-danger) !important;
+                color: white !important;
+                width: 100% !important;
+                border-radius: 8px !important;
+            }
+
+            .remove-ip-btn:hover {
+                background-color: var(--bs-danger) !important;
+                border-color: var(--bs-danger) !important;
+                opacity: 0.9 !important;
+            }
+
+            /* Force button height controls for mobile */
+            .input-group-mobile .btn,
+            .rule .input-group .btn,
+            .remove-ip-btn {
+                height: 44px !important;
+                max-height: 44px !important;
+                min-height: 44px !important;
+                line-height: 1.2 !important;
+                padding: 0.5rem 0.75rem !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                flex-shrink: 0 !important;
+                align-self: flex-start !important;
+            }
+
+            /* Ensure all input-groups in rules are mobile-friendly */
+            .rule .input-group {
+                display: flex !important;
+                flex-direction: column !important;
+                width: 100% !important;
+                align-items: stretch !important;
+            }
+
+            .rule .input-group .form-control {
+                width: 100% !important;
+                margin-bottom: 0.5rem !important;
+                border-radius: 12px !important;
+                height: 44px !important;
+            }
+
+            .rule .input-group .btn {
+                width: 100% !important;
+                border-radius: 8px !important;
+                height: 44px !important;
+                min-height: 44px !important;
+                max-height: 44px !important;
+                align-self: flex-start !important;
+                flex: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                flex-shrink: 0 !important;
+                padding: 0.5rem 1rem !important;
+                font-size: 0.875rem !important;
+                gap: 0.5rem !important;
+            }
+
+            /* Style remove buttons specifically */
+            .remove-ip-btn {
+                background-color: #dc3545 !important;
+                border-color: #dc3545 !important;
+                color: white !important;
+                border-radius: 8px !important;
+            }
+
+            .remove-ip-btn:hover {
+                background-color: #bb2d3b !important;
+                border-color: #bb2d3b !important;
+            }
+
+            /* Style Add IP button */
+            .add-ip-btn {
+                border-radius: 8px !important;
+                height: 40px !important;
+                min-height: 40px !important;
+                max-height: 40px !important;
+                padding: 0.5rem 1rem !important;
+                font-size: 0.875rem !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 0.5rem !important;
+            }
+        }
+
+        /* Tablet responsive design */
+        @media (min-width: 576px) {
+            .btn-group-tablet {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            /* Ensure proper spacing on small+ screens */
+            .btn-group-mobile {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+        }
+
+        @media (min-width: 768px) and (max-width: 991.98px) {
+            .btn-group-tablet {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.5rem;
+            }
+        }
+
+        /* Large desktop optimization */
+        @media (min-width: 1200px) {
+            .btn-group-mobile,
+            .btn-group-tablet {
+                display: flex;
+                flex-wrap: nowrap;
+                gap: 0.75rem;
+                width: auto;
+            }
+
+            /* Ensure title and buttons stay on same line */
+            .d-flex.flex-column.flex-sm-row {
+                flex-wrap: nowrap;
+            }
+
+            .d-flex.flex-column.flex-sm-row h1 {
+                white-space: nowrap;
+                margin-right: 2rem;
+            }
+        }
+
+        /* Enhanced form controls */
+        .form-control {
+            border-radius: 12px;
+            border: 1px solid rgba(var(--primary-rgb), 0.2);
+            transition: all 0.3s ease;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .form-control:focus {
+            border-color: rgb(var(--primary-rgb));
+            box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb), 0.25);
+        }
+
+        .form-check-input {
+            border-radius: 6px;
+        }
+
+        /* Ensure input groups work properly */
+        .input-group {
+            width: 100%;
+        }
+
+        .input-group .form-control {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        /* IP Pool enhancements */
+        .ip-pool-item {
+            transition: all 0.3s ease;
+        }
+
+        .ip-pool-item:hover {
+            transform: translateX(4px);
+        }
+
+        /* Toast improvements */
+        .toast {
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Loading states */
+        .btn-loading {
+            position: relative;
+            pointer-events: none;
+        }
+
+        .btn-loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            margin: auto;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Dark mode specific enhancements */
+        [data-bs-theme="dark"] .card {
+            background: rgba(var(--card-bg-rgb), 0.7);
+        }
+
+        [data-bs-theme="dark"] .navbar {
+            background: rgba(var(--card-bg-rgb), 0.8);
+        }
+
+        /* Additional mobile optimizations */
+        @media (max-width: 575.98px) {
+            body {
+                padding-top: calc(66px + env(safe-area-inset-top));
+            }
+
+            .container {
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+
+            .card-header .card-title {
+                font-size: 1rem;
+            }
+
+            .badge {
+                font-size: 0.7rem;
+            }
+
+            .text-monospace {
+                font-size: 0.85rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .btn-delete {
+                width: 2.5rem !important;
+                height: 2.5rem !important;
+                top: 0.75rem;
+                right: 0.75rem;
+                min-width: 2.5rem !important;
+                min-height: 2.5rem !important;
+                max-width: 2.5rem !important;
+                max-height: 2.5rem !important;
+                border-radius: 50% !important;
+                flex-shrink: 0 !important;
+                padding: 0 !important;
+                line-height: 1 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+
+            /* Ensure button text fits properly */
+            .btn {
+                font-size: 0.9rem;
+                padding: 0.5rem 0.75rem;
+            }
+
+            .btn-sm {
+                font-size: 0.8rem;
+                padding: 0.375rem 0.5rem;
+            }
+
+            /* Allow text wrapping for longer button labels */
+            .btn span {
+                white-space: normal;
+                line-height: 1.2;
+            }
+
+            /* Force full width for IP input containers */
+            .allowed-ips-list {
+                width: 100%;
+            }
+
+            .allowed-ips-list .input-group,
+            .allowed-ips-list .input-group-mobile {
+                width: 100% !important;
+                display: flex !important;
+                flex-direction: column !important;
+            }
+
+            .allowed-ips-list .form-control,
+            .allowed-ips-list .rule-allowed-ip {
+                width: 100% !important;
+                margin-bottom: 0.5rem !important;
+                border-radius: 12px !important;
+                min-width: 0 !important;
+                flex: none !important;
+            }
+
+            .allowed-ips-list .btn,
+            .allowed-ips-list .remove-ip-btn {
+                width: 100% !important;
+                border-radius: 12px !important;
+                flex: none !important;
+                height: auto !important;
+                min-height: 44px !important;
+                max-height: 48px !important;
+                align-self: flex-start !important;
+            }
+
+            /* Ensure rule form controls take full width */
+            .rule-from,
+            .rule-to {
+                width: 100% !important;
+            }
+
+            /* Override any Bootstrap input-group styles on mobile */
+            .card-body .input-group {
+                width: 100% !important;
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+
+            .card-body .input-group > * {
+                width: 100% !important;
+                flex: none !important;
+                border-radius: 12px !important;
+            }
+
+            .card-body .input-group .form-control {
+                margin-bottom: 0.5rem !important;
+            }
+
+            .card-body .input-group .btn {
+                height: auto !important;
+                min-height: 44px !important;
+                max-height: 48px !important;
+                align-self: flex-start !important;
+            }
+
+            /* Specific fix for IP input fields in rules */
+            .rule .input-group {
+                display: flex !important;
+                flex-direction: column !important;
+                width: 100% !important;
+                align-items: stretch !important;
+            }
+
+            .rule .input-group .form-control {
+                width: 100% !important;
+                margin-bottom: 0.5rem !important;
+                border-radius: 12px !important;
+                border-top-right-radius: 12px !important;
+                border-bottom-right-radius: 12px !important;
+            }
+
+            .rule .input-group .btn {
+                width: 100% !important;
+                border-radius: 8px !important;
+                border-top-left-radius: 8px !important;
+                border-bottom-left-radius: 8px !important;
+                height: 44px !important;
+                min-height: 44px !important;
+                max-height: 44px !important;
+                align-self: flex-start !important;
+                flex: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                flex-shrink: 0 !important;
+                padding: 0.5rem 1rem !important;
+                font-size: 0.875rem !important;
+                gap: 0.5rem !important;
+            }
+
+            /* Style Add IP button */
+            .add-ip-btn {
+                border-radius: 8px !important;
+                height: 40px !important;
+                min-height: 40px !important;
+                max-height: 40px !important;
+                padding: 0.5rem 1rem !important;
+                font-size: 0.875rem !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 0.5rem !important;
+            }
+        }
+
+        /* Touch-friendly improvements */
+        @media (hover: none) and (pointer: coarse) {
+            .btn {
+                min-height: 44px;
+                padding: 0.75rem 1rem;
+            }
+
+            .btn-sm {
+                min-height: 36px;
+                padding: 0.5rem 0.75rem;
+            }
+
+            .form-control {
+                min-height: 44px;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            .form-check-input {
+                width: 1.25rem;
+                height: 1.25rem;
+            }
+        }
+
+        /* Accessibility improvements */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Focus improvements for keyboard navigation */
+        .btn:focus,
+        .form-control:focus,
+        .form-check-input:focus {
+            outline: 2px solid rgb(var(--primary-rgb));
+            outline-offset: 2px;
         }
     </style>
     <link rel="preconnect" href="https://rsms.me/">
@@ -82,11 +746,11 @@
         <div class="container">
             <a class="navbar-brand fw-bold" href="#">
                 <i class="bi bi-hdd-network-fill text-primary"></i>
-                Port Forwarder
+                <span>Port Forwarder</span>
             </a>
-            <div class="d-flex align-items-center">
-                <span id="client-ip" class="navbar-text me-3 text-muted fs-sm"></span>
-                <button id="theme-switcher" class="btn border-0">
+            <div class="d-flex align-items-center gap-2">
+                <span id="client-ip" class="navbar-text text-muted fs-sm d-none d-md-block"></span>
+                <button id="theme-switcher" class="btn border-0 rounded-pill p-2">
                     <i class="bi bi-sun-fill"></i>
                 </button>
             </div>
@@ -95,15 +759,27 @@
 
     <div class="container py-5">
         <div
-            class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 pb-3 border-bottom border-primary-subtle">
-            <h1 class="text-body-emphasis mb-3 mb-md-0">Configuration Rules</h1>
-            <div class="d-grid d-md-flex gap-2">
-                <button id="add-rule" class="btn btn-primary"><i class="bi bi-plus-circle-fill me-2"></i>Add
-                    Rule</button>
-                <button id="allow-my-ip" class="btn btn-info"><i class="bi bi-person-check-fill me-2"></i>Allow My IP Range</button>
-                <button id="allow-current-ip" class="btn btn-warning"><i class="bi bi-shield-check me-2"></i>Allow Current IP</button>
-                <button id="save-config" class="btn btn-success"><i class="bi bi-check-circle-fill me-2"></i>Save and
-                    Apply</button>
+            class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 pb-3 border-bottom border-primary-subtle">
+            <h1 class="text-body-emphasis mb-3 mb-sm-0">Configuration Rules</h1>
+            <div class="btn-group-mobile btn-group-tablet d-grid d-sm-flex gap-2 w-100 w-sm-auto">
+                <button id="add-rule" class="btn btn-primary">
+                    <i class="bi bi-plus-circle-fill me-2"></i>
+                    <span>Add Rule</span>
+                </button>
+                <button id="allow-my-ip" class="btn btn-info">
+                    <i class="bi bi-person-check-fill me-2"></i>
+                    <span class="d-none d-lg-inline">Allow My IP Range</span>
+                    <span class="d-lg-none">My IP Range</span>
+                </button>
+                <button id="allow-current-ip" class="btn btn-warning">
+                    <i class="bi bi-shield-check me-2"></i>
+                    <span class="d-none d-lg-inline">Allow Current IP</span>
+                    <span class="d-lg-none">Current IP</span>
+                </button>
+                <button id="save-config" class="btn btn-success">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <span>Save and Apply</span>
+                </button>
             </div>
         </div>
 
@@ -119,8 +795,16 @@
             <div class="card-body">
                 <p class="text-muted mb-3">
                     <i class="bi bi-info-circle me-1"></i>
-                    These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used) eviction when full.
-                    <br><small class="text-success"><i class="bi bi-arrow-up-circle"></i> <strong>Top = Newest</strong> (most recent, safe) <i class="bi bi-arrow-right"></i> <strong>Bottom = Oldest</strong> (will be evicted first) <i class="bi bi-arrow-down-circle text-danger"></i></small>
+                    <span>These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used) eviction when full.</span>
+                    <br><small class="text-success">
+                        <i class="bi bi-arrow-up-circle"></i>
+                        <strong>Top = Newest</strong>
+                        <span class="d-none d-md-inline">(most recent, safe)</span>
+                        <i class="bi bi-arrow-right"></i>
+                        <strong>Bottom = Oldest</strong>
+                        <span class="d-none d-md-inline">(will be evicted first)</span>
+                        <i class="bi bi-arrow-down-circle text-danger"></i>
+                    </small>
                 </p>
                 <div id="ip-pool-empty" class="text-center text-muted py-3" style="display: none;">
                     <i class="bi bi-inbox display-6 d-block mb-2"></i>
@@ -224,9 +908,9 @@
                             }
 
                             return `
-                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ${riskLevel}">
-                                    <span class="text-monospace fw-bold flex-grow-1">${ip}</span>
-                                    <div class="d-flex align-items-center gap-2">
+                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ip-pool-item ${riskLevel}">
+                                    <span class="text-monospace fw-bold flex-grow-1 me-2" style="word-break: break-all;">${ip}</span>
+                                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
                                         <span class="badge ${badgeClass} rounded-pill">${positionIcon}${badgeText}</span>
                                         <button class="btn btn-outline-danger btn-sm remove-temp-ip-btn" data-ip="${ip}" title="Remove IP">
                                             <i class="bi bi-trash"></i>
@@ -268,10 +952,35 @@
                 themeSwitcherBtn.innerHTML = theme === 'dark' ?
                     '<i class="bi bi-moon-stars-fill"></i>' :
                     '<i class="bi bi-sun-fill"></i>';
+
+                // Update iOS status bar and theme color
+                updateStatusBarForTheme(theme);
+            };
+
+            const updateStatusBarForTheme = (theme) => {
+                // Update theme-color meta tag for address bar
+                let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+                if (!themeColorMeta) {
+                    themeColorMeta = document.createElement('meta');
+                    themeColorMeta.name = 'theme-color';
+                    document.head.appendChild(themeColorMeta);
+                }
+
+                if (theme === 'dark') {
+                    themeColorMeta.content = '#0a0e18';
+                } else {
+                    themeColorMeta.content = '#f8f9fa';
+                }
+
+                // Force a minimal layout reflow to trigger iOS status bar color update
+                document.body.style.paddingTop = document.body.style.paddingTop;
             };
 
             const preferredTheme = getStoredTheme() || 'light';
             applyTheme(preferredTheme);
+
+            // Initialize status bar on page load
+            updateStatusBarForTheme(preferredTheme);
 
             themeSwitcherBtn.addEventListener('click', () => {
                 const currentTheme = htmlEl.getAttribute('data-bs-theme');
@@ -304,9 +1013,12 @@
                 const allowedIPs = rule.allowed_ips || [];
 
                 const ipListHTML = allowedIPs.map(ip => `
-                    <div class="input-group mb-2">
+                    <div class="input-group input-group-mobile mb-2">
                         <input type="text" class="form-control rule-allowed-ip" value="${ip}" placeholder="e.g., 192.168.1.1">
-                        <button class="btn btn-outline-danger remove-ip-btn" type="button"><i class="bi bi-trash"></i></button>
+                        <button class="btn btn-outline-danger remove-ip-btn" type="button">
+                            <i class="bi bi-trash"></i>
+                            <span class="ms-1">Remove</span>
+                        </button>
                     </div>
                 `).join('');
 
@@ -316,7 +1028,7 @@
                         <div class="row">
                             <div class="col-12 mb-3">
                                 <label class="form-label fw-bold">Protocols</label>
-                                <div class="d-flex gap-3">
+                                <div class="d-flex flex-wrap gap-3">
                                     <div class="form-check form-check-inline">
                                         <input class="form-check-input rule-proto-tcp" type="checkbox" value="tcp" ${protocols.includes('tcp') ? 'checked' : ''}>
                                         <label class="form-check-label">TCP</label>
@@ -329,21 +1041,27 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-lg-6 mb-3">
+                            <div class="col-12 col-lg-6 mb-3">
                                 <label class="form-label fw-bold">Source (From)</label>
                                 <input type="text" class="form-control rule-from" value="${rule.from || ''}" placeholder="e.g., 0.0.0.0:8080">
                             </div>
-                            <div class="col-lg-6 mb-3">
+                            <div class="col-12 col-lg-6 mb-3">
                                 <label class="form-label fw-bold">Destination (To)</label>
                                 <input type="text" class="form-control rule-to" value="${rule.to || ''}" placeholder="e.g., 127.0.0.1:80">
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Allowed IPs <span class="text-muted fw-normal">(Leave blank to allow all)</span></label>
+                            <label class="form-label fw-bold">
+                                Allowed IPs
+                                <span class="text-muted fw-normal">(Leave blank to allow all)</span>
+                            </label>
                             <div class="allowed-ips-list">
                                 ${ipListHTML}
                             </div>
-                            <button class="btn btn-outline-primary btn-sm mt-2 add-ip-btn" type="button"><i class="bi bi-plus-circle me-1"></i>Add IP</button>
+                            <button class="btn btn-outline-primary btn-sm mt-2 add-ip-btn" type="button">
+                                <i class="bi bi-plus-circle me-1"></i>
+                                Add IP
+                            </button>
                         </div>
                     </div>
                 `;
@@ -448,9 +1166,12 @@
                     const ipListContainer = e.target.closest('.mb-3').querySelector(
                         '.allowed-ips-list');
                     const newIpInputHTML = `
-                        <div class="input-group mb-2">
+                        <div class="input-group input-group-mobile mb-2">
                             <input type="text" class="form-control rule-allowed-ip" placeholder="e.g., 192.168.1.1">
-                            <button class="btn btn-outline-danger remove-ip-btn" type="button"><i class="bi bi-trash"></i></button>
+                            <button class="btn btn-outline-danger remove-ip-btn" type="button">
+                                <i class="bi bi-trash"></i>
+                                <span class="ms-1">Remove</span>
+                            </button>
                         </div>
                     `;
                     ipListContainer.insertAdjacentHTML('beforeend', newIpInputHTML);
