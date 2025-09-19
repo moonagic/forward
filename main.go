@@ -10,8 +10,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -22,6 +24,7 @@ var indexHTML []byte
 
 const udpTimeout = 5 * time.Minute
 const configPath = "config.yml"
+const ipPoolPath = "ip_pool.json"
 
 // --- Data Structures ---
 
@@ -45,10 +48,15 @@ type Forward struct {
 
 // TempIPPool manages a pool of temporarily allowed IPs with FIFO eviction
 type TempIPPool struct {
-	mu      sync.RWMutex
-	ips     []string    // FIFO queue of IPs
-	ipMap   map[string]bool // Fast lookup
-	maxSize int
+	mu       sync.RWMutex
+	ips      []string         // FIFO queue of IPs
+	ipMap    map[string]bool  // Fast lookup
+	maxSize  int
+	filePath string          // Path to persistent storage file
+}
+
+type IPPoolData struct {
+	IPs []string `json:"ips"`
 }
 
 type RemoveIPRequest struct {
@@ -58,21 +66,82 @@ type RemoveIPRequest struct {
 // --- Global Manager ---
 
 var manager = NewForwarderManager()
-var tempIPPool = NewTempIPPool(10)
+var tempIPPool = NewTempIPPool(10, ipPoolPath)
 
 // --- Temporary IP Pool ---
 
-func NewTempIPPool(maxSize int) *TempIPPool {
-	return &TempIPPool{
-		ips:     make([]string, 0, maxSize),
-		ipMap:   make(map[string]bool),
-		maxSize: maxSize,
+func NewTempIPPool(maxSize int, filePath string) *TempIPPool {
+	pool := &TempIPPool{
+		ips:      make([]string, 0, maxSize),
+		ipMap:    make(map[string]bool),
+		maxSize:  maxSize,
+		filePath: filePath,
 	}
+
+	// Load existing IPs from file
+	if err := pool.loadFromFile(); err != nil {
+		log.Printf("Warning: Could not load IP pool from file %s: %v", filePath, err)
+	} else {
+		log.Printf("IP pool persistence enabled using file: %s", filePath)
+	}
+
+	return pool
+}
+
+// loadFromFile loads the IP pool from persistent storage
+func (pool *TempIPPool) loadFromFile() error {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	data, err := os.ReadFile(pool.filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist yet, that's OK
+			return nil
+		}
+		return err
+	}
+
+	var poolData IPPoolData
+	if err := json.Unmarshal(data, &poolData); err != nil {
+		return err
+	}
+
+	// Rebuild the pool from loaded data
+	pool.ips = make([]string, 0, pool.maxSize)
+	pool.ipMap = make(map[string]bool)
+
+	for _, ip := range poolData.IPs {
+		if len(pool.ips) < pool.maxSize {
+			pool.ips = append(pool.ips, ip)
+			pool.ipMap[ip] = true
+		}
+	}
+
+	log.Printf("Loaded %d IPs from persistent storage", len(pool.ips))
+	return nil
+}
+
+// saveToFile saves the current IP pool to persistent storage
+func (pool *TempIPPool) saveToFile() error {
+	poolData := IPPoolData{
+		IPs: make([]string, len(pool.ips)),
+	}
+	copy(poolData.IPs, pool.ips)
+
+	data, err := json.MarshalIndent(poolData, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(pool.filePath, data, 0644)
 }
 
 func (pool *TempIPPool) Add(ip string) bool {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
+
+	var isNewIP = false
 
 	// If IP already exists, move it to the end (most recent)
 	if pool.ipMap[ip] {
@@ -85,20 +154,27 @@ func (pool *TempIPPool) Add(ip string) bool {
 		}
 		// Add it to the end
 		pool.ips = append(pool.ips, ip)
-		return false // IP already existed, just moved to top
+		isNewIP = false // IP already existed, just moved to top
+	} else {
+		// If we're at capacity, remove the oldest IP
+		if len(pool.ips) >= pool.maxSize {
+			oldestIP := pool.ips[0]
+			pool.ips = pool.ips[1:]
+			delete(pool.ipMap, oldestIP)
+		}
+
+		// Add the new IP
+		pool.ips = append(pool.ips, ip)
+		pool.ipMap[ip] = true
+		isNewIP = true // New IP added
 	}
 
-	// If we're at capacity, remove the oldest IP
-	if len(pool.ips) >= pool.maxSize {
-		oldestIP := pool.ips[0]
-		pool.ips = pool.ips[1:]
-		delete(pool.ipMap, oldestIP)
+	// Save to file after modification
+	if err := pool.saveToFile(); err != nil {
+		log.Printf("Warning: Failed to save IP pool to file: %v", err)
 	}
 
-	// Add the new IP
-	pool.ips = append(pool.ips, ip)
-	pool.ipMap[ip] = true
-	return true // New IP added
+	return isNewIP
 }
 
 func (pool *TempIPPool) Contains(ip string) bool {
@@ -134,7 +210,25 @@ func (pool *TempIPPool) Remove(ip string) bool {
 
 	// Remove from map
 	delete(pool.ipMap, ip)
+
+	// Save to file after modification
+	if err := pool.saveToFile(); err != nil {
+		log.Printf("Warning: Failed to save IP pool to file: %v", err)
+	}
+
 	return true
+}
+
+// Shutdown gracefully saves the IP pool to file
+func (pool *TempIPPool) Shutdown() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	if err := pool.saveToFile(); err != nil {
+		log.Printf("Warning: Failed to save IP pool during shutdown: %v", err)
+	} else {
+		log.Printf("IP pool saved successfully during shutdown")
+	}
 }
 
 // --- Forwarder Manager ---
@@ -523,13 +617,31 @@ func main() {
 		log.Fatalln("One or more ports are unavailable, exiting.")
 	}
 
+	// Set up graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
 	go startAdminServer(config.AdminAddr, config.BasicAuth)
 
 	manager.mu.Lock()
 	manager.StartForwarders(config.Forwards)
 	manager.mu.Unlock()
 
-	select {}
+	log.Println("Service started. Press Ctrl+C to exit gracefully.")
+
+	// Wait for shutdown signal
+	<-sigChan
+	log.Println("Shutdown signal received, performing graceful shutdown...")
+
+	// Save IP pool before exit
+	tempIPPool.Shutdown()
+
+	// Stop all forwarders
+	manager.mu.Lock()
+	manager.StopAll()
+	manager.mu.Unlock()
+
+	log.Println("Graceful shutdown completed.")
 }
 
 // --- Port Forwarding & Validation Logic ---

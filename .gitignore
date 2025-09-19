@@ -34,3 +34,4 @@ go.work.sum
 config.yml
 bin/
 __debug*
+ip_pool.json
