@@ -70,7 +70,7 @@ func NewTempIPPool(maxSize int) *TempIPPool {
 	}
 }
 
-func (pool *TempIPPool) Add(ip string) {
+func (pool *TempIPPool) Add(ip string) bool {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -85,7 +85,7 @@ func (pool *TempIPPool) Add(ip string) {
 		}
 		// Add it to the end
 		pool.ips = append(pool.ips, ip)
-		return
+		return false // IP already existed, just moved to top
 	}
 
 	// If we're at capacity, remove the oldest IP
@@ -98,6 +98,7 @@ func (pool *TempIPPool) Add(ip string) {
 	// Add the new IP
 	pool.ips = append(pool.ips, ip)
 	pool.ipMap[ip] = true
+	return true // New IP added
 }
 
 func (pool *TempIPPool) Contains(ip string) bool {
@@ -317,11 +318,17 @@ func allowHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add to temporary IP pool
-	tempIPPool.Add(ipStr)
+	isNewIP := tempIPPool.Add(ipStr)
 
-	log.Printf("Added client IP %s to temporary IP pool", ipStr)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Successfully added %s to temporary whitelist", ipStr)))
+	if isNewIP {
+		log.Printf("Added new client IP %s to temporary IP pool", ipStr)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("New IP Added"))
+	} else {
+		log.Printf("Reset existing client IP %s to most recent in temporary IP pool", ipStr)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Old IP Reseted"))
+	}
 }
 
 func allowMyIPHandler(w http.ResponseWriter, r *http.Request) {
