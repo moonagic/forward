@@ -120,7 +120,7 @@
                 <p class="text-muted mb-3">
                     <i class="bi bi-info-circle me-1"></i>
                     These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used) eviction when full.
-                    <br><small class="text-success"><i class="bi bi-arrow-up-circle"></i> <strong>Newest</strong> (most recent access) → <strong>Oldest</strong> (will be evicted first) <i class="bi bi-arrow-down-circle text-warning"></i></small>
+                    <br><small class="text-success"><i class="bi bi-arrow-up-circle"></i> <strong>Top = Newest</strong> (most recent, safe) <i class="bi bi-arrow-right"></i> <strong>Bottom = Oldest</strong> (will be evicted first) <i class="bi bi-arrow-down-circle text-danger"></i></small>
                 </p>
                 <div id="ip-pool-empty" class="text-center text-muted py-3" style="display: none;">
                     <i class="bi bi-inbox display-6 d-block mb-2"></i>
@@ -190,28 +190,44 @@
                         const currentTheme = htmlEl.getAttribute('data-bs-theme');
                         const bgClass = currentTheme === 'dark' ? 'bg-dark' : 'bg-light';
 
-                        poolContainer.innerHTML = data.ips.map((ip, index) => {
-                            const isNewest = index === 0;
-                            const isOldest = index === data.ips.length - 1;
-                            let badgeClass, badgeText, positionIcon;
+                        // 反转数组显示，让最新的IP在顶部
+                        const reversedIps = [...data.ips].reverse();
+
+                        poolContainer.innerHTML = reversedIps.map((ip, displayIndex) => {
+                            const originalIndex = data.ips.length - 1 - displayIndex; // 计算在原数组中的位置
+                            const isNewest = originalIndex === data.ips.length - 1; // 原数组最后一个是最新的
+                            const isOldest = originalIndex === 0; // 原数组第一个是最老的
+                            let badgeClass, badgeText, positionIcon, riskLevel;
 
                             if (isNewest) {
                                 badgeClass = 'bg-success';
                                 badgeText = 'Newest';
-                                positionIcon = '<i class="bi bi-arrow-up-circle me-1"></i>';
+                                positionIcon = '<i class="bi bi-shield-check me-1"></i>';
+                                riskLevel = 'border border-success';
                             } else if (isOldest) {
-                                badgeClass = 'bg-warning text-dark';
+                                badgeClass = 'bg-danger';
                                 badgeText = 'Oldest';
-                                positionIcon = '<i class="bi bi-arrow-down-circle me-1"></i>';
+                                positionIcon = '<i class="bi bi-exclamation-triangle me-1"></i>';
+                                riskLevel = 'border border-danger';
                             } else {
-                                badgeClass = 'bg-secondary';
-                                badgeText = `#${index + 1}`;
-                                positionIcon = '';
+                                // 中间位置：根据接近底部的程度调整颜色
+                                const totalIps = data.ips.length;
+                                const riskScore = (totalIps - 1 - originalIndex) / (totalIps - 1); // 0=最危险, 1=最安全
+
+                                if (riskScore < 0.3) {
+                                    badgeClass = 'bg-warning text-dark';
+                                    positionIcon = '<i class="bi bi-dash-circle me-1"></i>';
+                                } else {
+                                    badgeClass = 'bg-secondary';
+                                    positionIcon = '';
+                                }
+                                badgeText = `#${displayIndex + 1}`;
+                                riskLevel = '';
                             }
 
                             return `
                             <div class="col-md-6 col-lg-4">
-                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ${isNewest ? 'border border-success' : isOldest ? 'border border-warning' : ''}">
+                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ${riskLevel}">
                                     <span class="text-monospace fw-bold flex-grow-1">${ip}</span>
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="badge ${badgeClass} rounded-pill">${positionIcon}${badgeText}</span>
