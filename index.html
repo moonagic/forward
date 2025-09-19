@@ -126,8 +126,8 @@
                     <i class="bi bi-inbox display-6 d-block mb-2"></i>
                     No temporary IPs currently allowed
                 </div>
-                <div id="ip-pool-container" class="row g-2">
-                    <!-- IP列表将在这里动态生成 -->
+                <div id="ip-pool-container" class="d-flex flex-column gap-2">
+                    <!-- IP列表纵向排列 -->
                 </div>
                 <div class="d-flex gap-2 mt-3">
                     <button id="refresh-ip-pool" class="btn btn-outline-info btn-sm">
@@ -194,9 +194,9 @@
                         const reversedIps = [...data.ips].reverse();
 
                         poolContainer.innerHTML = reversedIps.map((ip, displayIndex) => {
-                            const originalIndex = data.ips.length - 1 - displayIndex; // 计算在原数组中的位置
-                            const isNewest = originalIndex === data.ips.length - 1; // 原数组最后一个是最新的
-                            const isOldest = originalIndex === 0; // 原数组第一个是最老的
+                            const originalIndex = data.ips.length - 1 - displayIndex;
+                            const isNewest = originalIndex === data.ips.length - 1;
+                            const isOldest = originalIndex === 0;
                             let badgeClass, badgeText, positionIcon, riskLevel;
 
                             if (isNewest) {
@@ -210,10 +210,8 @@
                                 positionIcon = '<i class="bi bi-exclamation-triangle me-1"></i>';
                                 riskLevel = 'border border-danger';
                             } else {
-                                // 中间位置：根据接近底部的程度调整颜色
                                 const totalIps = data.ips.length;
-                                const riskScore = (totalIps - 1 - originalIndex) / (totalIps - 1); // 0=最危险, 1=最安全
-
+                                const riskScore = (totalIps - 1 - originalIndex) / (totalIps - 1);
                                 if (riskScore < 0.3) {
                                     badgeClass = 'bg-warning text-dark';
                                     positionIcon = '<i class="bi bi-dash-circle me-1"></i>';
@@ -226,7 +224,6 @@
                             }
 
                             return `
-                            <div class="col-md-6 col-lg-4">
                                 <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ${riskLevel}">
                                     <span class="text-monospace fw-bold flex-grow-1">${ip}</span>
                                     <div class="d-flex align-items-center gap-2">
@@ -236,7 +233,6 @@
                                         </button>
                                     </div>
                                 </div>
-                            </div>
                             `;
                         }).join('');
                     } else {
