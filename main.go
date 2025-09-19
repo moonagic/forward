@@ -51,6 +51,10 @@ type TempIPPool struct {
 	maxSize int
 }
 
+type RemoveIPRequest struct {
+	IP string `json:"ip"`
+}
+
 // --- Global Manager ---
 
 var manager = NewForwarderManager()
@@ -108,6 +112,28 @@ func (pool *TempIPPool) GetAll() []string {
 	result := make([]string, len(pool.ips))
 	copy(result, pool.ips)
 	return result
+}
+
+func (pool *TempIPPool) Remove(ip string) bool {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// Check if IP exists
+	if !pool.ipMap[ip] {
+		return false
+	}
+
+	// Find and remove the IP from slice
+	for i, existingIP := range pool.ips {
+		if existingIP == ip {
+			pool.ips = append(pool.ips[:i], pool.ips[i+1:]...)
+			break
+		}
+	}
+
+	// Remove from map
+	delete(pool.ipMap, ip)
+	return true
 }
 
 // --- Forwarder Manager ---
@@ -354,6 +380,34 @@ func allowMyIPHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("Successfully added %s to all rules.", cidrStr)))
 }
 
+func removeTempIPHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RemoveIPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ip := net.ParseIP(req.IP)
+	if ip == nil {
+		http.Error(w, "Invalid IP address: "+req.IP, http.StatusBadRequest)
+		return
+	}
+
+	// Remove from temporary IP pool
+	if tempIPPool.Remove(req.IP) {
+		log.Printf("Removed IP %s from temporary IP pool", req.IP)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("Successfully removed %s from temporary whitelist", req.IP)))
+	} else {
+		http.Error(w, fmt.Sprintf("IP %s not found in temporary whitelist", req.IP), http.StatusNotFound)
+	}
+}
+
 // reloadConfigAndForwarders stops, checks, saves, and starts the forwarders.
 // The manager's mutex must be held by the caller.
 func reloadConfigAndForwarders(newConfig Config) error {
@@ -399,6 +453,7 @@ func startAdminServer(addr string, auth BasicAuth) {
 
 	configHandlerWithAuth := basicAuth(configHandler, auth.Username, auth.Password)
 	allowHandlerWithAuth := basicAuth(allowHandler, auth.Username, auth.Password)
+	removeTempIPHandlerWithAuth := basicAuth(removeTempIPHandler, auth.Username, auth.Password)
 	allowMyIPHandlerWithAuth := basicAuth(allowMyIPHandler, auth.Username, auth.Password)
 	rootHandlerWithAuth := basicAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -428,6 +483,7 @@ func startAdminServer(addr string, auth BasicAuth) {
 
 	http.HandleFunc("/api/config", configHandlerWithAuth)
 	http.HandleFunc("/api/allow", allowHandlerWithAuth)
+	http.HandleFunc("/api/remove-temp-ip", removeTempIPHandlerWithAuth)
 	http.HandleFunc("/api/allow-my-ip", allowMyIPHandlerWithAuth)
 	http.HandleFunc("/api/ip", basicAuth(ipHandler, auth.Username, auth.Password))
 	http.HandleFunc("/api/ip-pool", basicAuth(ipPoolHandler, auth.Username, auth.Password))

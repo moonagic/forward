@@ -187,8 +187,13 @@
                         poolContainer.innerHTML = data.ips.map((ip, index) => `
                             <div class="col-md-6 col-lg-4">
                                 <div class="d-flex align-items-center justify-content-between bg-light rounded p-2 ${htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'bg-dark' : 'bg-light'}">
-                                    <span class="text-monospace fw-bold">${ip}</span>
-                                    <span class="badge bg-secondary rounded-pill">#${index + 1}</span>
+                                    <span class="text-monospace fw-bold flex-grow-1">${ip}</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-secondary rounded-pill">#${index + 1}</span>
+                                        <button class="btn btn-outline-danger btn-sm remove-temp-ip-btn" data-ip="${ip}" title="Remove IP">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         `).join('');
@@ -474,6 +479,43 @@
 
             refreshIpPoolBtn.addEventListener('click', () => {
                 loadIPPool();
+            });
+
+            // Handle temporary IP removal
+            document.addEventListener('click', async (e) => {
+                if (e.target.closest('.remove-temp-ip-btn')) {
+                    const btn = e.target.closest('.remove-temp-ip-btn');
+                    const ip = btn.dataset.ip;
+
+                    if (!confirm(`Are you sure you want to remove ${ip} from the temporary whitelist?`)) {
+                        return;
+                    }
+
+                    try {
+                        btn.disabled = true;
+                        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                        const response = await fetch(`/api/remove-temp-ip`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ ip: ip })
+                        });
+
+                        const responseText = await response.text();
+                        if (!response.ok) {
+                            throw new Error(`Failed to remove IP: ${responseText}`);
+                        }
+
+                        showToast(responseText);
+                        loadIPPool(); // Refresh IP pool display
+                    } catch (error) {
+                        showToast(error.message, true);
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-trash"></i>';
+                    }
+                }
             });
 
             loadConfig();
