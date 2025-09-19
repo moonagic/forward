@@ -121,11 +121,12 @@
                     <i class="bi bi-info-circle me-1"></i>
                     These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used) eviction when full.
                 </p>
+                <div id="ip-pool-empty" class="text-center text-muted py-3" style="display: none;">
+                    <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                    No temporary IPs currently allowed
+                </div>
                 <div id="ip-pool-container" class="row g-2">
-                    <div class="col-12 text-center text-muted py-3" id="ip-pool-empty">
-                        <i class="bi bi-inbox display-6 d-block mb-2"></i>
-                        No temporary IPs currently allowed
-                    </div>
+                    <!-- IP列表将在这里动态生成 -->
                 </div>
                 <div class="d-flex gap-2 mt-3">
                     <button id="refresh-ip-pool" class="btn btn-outline-info btn-sm">
@@ -184,9 +185,13 @@
 
                     if (data.ips && data.ips.length > 0) {
                         poolEmpty.style.display = 'none';
+                        // 实时获取当前主题
+                        const currentTheme = htmlEl.getAttribute('data-bs-theme');
+                        const bgClass = currentTheme === 'dark' ? 'bg-dark' : 'bg-light';
+
                         poolContainer.innerHTML = data.ips.map((ip, index) => `
                             <div class="col-md-6 col-lg-4">
-                                <div class="d-flex align-items-center justify-content-between bg-light rounded p-2 ${htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'bg-dark' : 'bg-light'}">
+                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2">
                                     <span class="text-monospace fw-bold flex-grow-1">${ip}</span>
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="badge bg-secondary rounded-pill">#${index + 1}</span>
@@ -240,6 +245,8 @@
                 const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
                 setStoredTheme(newTheme);
                 applyTheme(newTheme);
+                // 主题切换后刷新IP池显示以更新背景色
+                loadIPPool();
             });
 
             // --- Core Logic ---
