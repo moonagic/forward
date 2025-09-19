@@ -43,9 +43,72 @@ type Forward struct {
 	AllowedIPs []string `yaml:"allowed_ips" json:"allowed_ips"`
 }
 
+// TempIPPool manages a pool of temporarily allowed IPs with FIFO eviction
+type TempIPPool struct {
+	mu      sync.RWMutex
+	ips     []string    // FIFO queue of IPs
+	ipMap   map[string]bool // Fast lookup
+	maxSize int
+}
+
 // --- Global Manager ---
 
 var manager = NewForwarderManager()
+var tempIPPool = NewTempIPPool(10)
+
+// --- Temporary IP Pool ---
+
+func NewTempIPPool(maxSize int) *TempIPPool {
+	return &TempIPPool{
+		ips:     make([]string, 0, maxSize),
+		ipMap:   make(map[string]bool),
+		maxSize: maxSize,
+	}
+}
+
+func (pool *TempIPPool) Add(ip string) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// If IP already exists, move it to the end (most recent)
+	if pool.ipMap[ip] {
+		// Find and remove the existing IP
+		for i, existingIP := range pool.ips {
+			if existingIP == ip {
+				pool.ips = append(pool.ips[:i], pool.ips[i+1:]...)
+				break
+			}
+		}
+		// Add it to the end
+		pool.ips = append(pool.ips, ip)
+		return
+	}
+
+	// If we're at capacity, remove the oldest IP
+	if len(pool.ips) >= pool.maxSize {
+		oldestIP := pool.ips[0]
+		pool.ips = pool.ips[1:]
+		delete(pool.ipMap, oldestIP)
+	}
+
+	// Add the new IP
+	pool.ips = append(pool.ips, ip)
+	pool.ipMap[ip] = true
+}
+
+func (pool *TempIPPool) Contains(ip string) bool {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	return pool.ipMap[ip]
+}
+
+func (pool *TempIPPool) GetAll() []string {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	result := make([]string, len(pool.ips))
+	copy(result, pool.ips)
+	return result
+}
 
 // --- Forwarder Manager ---
 
@@ -213,6 +276,28 @@ func getClientIP(r *http.Request) string {
 	return ip
 }
 
+func allowHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get client IP directly from request
+	ipStr := getClientIP(r)
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		http.Error(w, "Could not parse client IP address: "+ipStr, http.StatusBadRequest)
+		return
+	}
+
+	// Add to temporary IP pool
+	tempIPPool.Add(ipStr)
+
+	log.Printf("Added client IP %s to temporary IP pool", ipStr)
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("Successfully added %s to temporary whitelist", ipStr)))
+}
+
 func allowMyIPHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -313,6 +398,7 @@ func startAdminServer(addr string, auth BasicAuth) {
 	}
 
 	configHandlerWithAuth := basicAuth(configHandler, auth.Username, auth.Password)
+	allowHandlerWithAuth := basicAuth(allowHandler, auth.Username, auth.Password)
 	allowMyIPHandlerWithAuth := basicAuth(allowMyIPHandler, auth.Username, auth.Password)
 	rootHandlerWithAuth := basicAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -325,9 +411,26 @@ func startAdminServer(addr string, auth BasicAuth) {
 		json.NewEncoder(w).Encode(map[string]string{"ip": ipStr})
 	}
 
+	ipPoolHandler := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		ips := tempIPPool.GetAll()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ips": ips,
+			"maxSize": tempIPPool.maxSize,
+			"currentSize": len(ips),
+		})
+	}
+
 	http.HandleFunc("/api/config", configHandlerWithAuth)
+	http.HandleFunc("/api/allow", allowHandlerWithAuth)
 	http.HandleFunc("/api/allow-my-ip", allowMyIPHandlerWithAuth)
 	http.HandleFunc("/api/ip", basicAuth(ipHandler, auth.Username, auth.Password))
+	http.HandleFunc("/api/ip-pool", basicAuth(ipPoolHandler, auth.Username, auth.Password))
 	http.HandleFunc("/", rootHandlerWithAuth)
 
 	log.Printf("Starting web admin interface, listening on http://%s", addr)
@@ -372,11 +475,19 @@ func isIPAllowed(remoteIP net.IP, allowedNets []*net.IPNet) bool {
 	if len(allowedNets) == 0 {
 		return true
 	}
+
+	// Check configured allowed networks
 	for _, network := range allowedNets {
 		if network.Contains(remoteIP) {
 			return true
 		}
 	}
+
+	// Check temporary IP pool
+	if tempIPPool.Contains(remoteIP.String()) {
+		return true
+	}
+
 	return false
 }
 

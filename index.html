@@ -101,8 +101,37 @@
                 <button id="add-rule" class="btn btn-primary"><i class="bi bi-plus-circle-fill me-2"></i>Add
                     Rule</button>
                 <button id="allow-my-ip" class="btn btn-info"><i class="bi bi-person-check-fill me-2"></i>Allow My IP Range</button>
+                <button id="allow-current-ip" class="btn btn-warning"><i class="bi bi-shield-check me-2"></i>Allow Current IP</button>
                 <button id="save-config" class="btn btn-success"><i class="bi bi-check-circle-fill me-2"></i>Save and
                     Apply</button>
+            </div>
+        </div>
+
+        <!-- Temporary IP Pool Section -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-info bg-opacity-10">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-shield-check-fill text-info me-2"></i>
+                    Temporary IP Whitelist
+                    <span id="ip-pool-count" class="badge bg-info rounded-pill ms-2">0/10</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used) eviction when full.
+                </p>
+                <div id="ip-pool-container" class="row g-2">
+                    <div class="col-12 text-center text-muted py-3" id="ip-pool-empty">
+                        <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                        No temporary IPs currently allowed
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <button id="refresh-ip-pool" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -129,6 +158,8 @@
             const addRuleBtn = document.getElementById('add-rule');
             const saveConfigBtn = document.getElementById('save-config');
             const allowMyIpBtn = document.getElementById('allow-my-ip');
+            const allowCurrentIpBtn = document.getElementById('allow-current-ip');
+            const refreshIpPoolBtn = document.getElementById('refresh-ip-pool');
             const themeSwitcherBtn = document.getElementById('theme-switcher');
             const htmlEl = document.documentElement;
 
@@ -137,6 +168,38 @@
             const bsToast = new bootstrap.Toast(toastEl);
 
             let currentConfig = {};
+
+            // --- IP Pool Management ---
+            const loadIPPool = async () => {
+                try {
+                    const response = await fetch('/api/ip-pool');
+                    if (!response.ok) return;
+                    const data = await response.json();
+
+                    const poolContainer = document.getElementById('ip-pool-container');
+                    const poolCount = document.getElementById('ip-pool-count');
+                    const poolEmpty = document.getElementById('ip-pool-empty');
+
+                    poolCount.textContent = `${data.currentSize}/${data.maxSize}`;
+
+                    if (data.ips && data.ips.length > 0) {
+                        poolEmpty.style.display = 'none';
+                        poolContainer.innerHTML = data.ips.map((ip, index) => `
+                            <div class="col-md-6 col-lg-4">
+                                <div class="d-flex align-items-center justify-content-between bg-light rounded p-2 ${htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'bg-dark' : 'bg-light'}">
+                                    <span class="text-monospace fw-bold">${ip}</span>
+                                    <span class="badge bg-secondary rounded-pill">#${index + 1}</span>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        poolEmpty.style.display = 'block';
+                        poolContainer.innerHTML = '';
+                    }
+                } catch (error) {
+                    console.error('Error loading IP pool:', error);
+                }
+            };
 
             // --- IP Fetching ---
             const fetchAndDisplayIP = async () => {
@@ -381,8 +444,41 @@
                 }
             });
 
+            allowCurrentIpBtn.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to add your current IP to the temporary whitelist?')) {
+                    return;
+                }
+
+                try {
+                    allowCurrentIpBtn.disabled = true;
+                    allowCurrentIpBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
+
+                    const response = await fetch('/api/allow', {
+                        method: 'POST',
+                    });
+
+                    const responseText = await response.text();
+                    if (!response.ok) {
+                        throw new Error(`Failed to allow current IP: ${responseText}`);
+                    }
+
+                    showToast(responseText);
+                    loadIPPool(); // Refresh IP pool
+                } catch (error) {
+                    showToast(error.message, true);
+                } finally {
+                    allowCurrentIpBtn.disabled = false;
+                    allowCurrentIpBtn.innerHTML = '<i class="bi bi-shield-check me-2"></i>Allow Current IP';
+                }
+            });
+
+            refreshIpPoolBtn.addEventListener('click', () => {
+                loadIPPool();
+            });
+
             loadConfig();
             fetchAndDisplayIP();
+            loadIPPool();
         });
     </script>
 </body>
