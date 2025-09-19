@@ -120,6 +120,7 @@
                 <p class="text-muted mb-3">
                     <i class="bi bi-info-circle me-1"></i>
                     These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used) eviction when full.
+                    <br><small class="text-success"><i class="bi bi-arrow-up-circle"></i> <strong>Newest</strong> (most recent access) → <strong>Oldest</strong> (will be evicted first) <i class="bi bi-arrow-down-circle text-warning"></i></small>
                 </p>
                 <div id="ip-pool-empty" class="text-center text-muted py-3" style="display: none;">
                     <i class="bi bi-inbox display-6 d-block mb-2"></i>
@@ -189,19 +190,39 @@
                         const currentTheme = htmlEl.getAttribute('data-bs-theme');
                         const bgClass = currentTheme === 'dark' ? 'bg-dark' : 'bg-light';
 
-                        poolContainer.innerHTML = data.ips.map((ip, index) => `
+                        poolContainer.innerHTML = data.ips.map((ip, index) => {
+                            const isNewest = index === 0;
+                            const isOldest = index === data.ips.length - 1;
+                            let badgeClass, badgeText, positionIcon;
+
+                            if (isNewest) {
+                                badgeClass = 'bg-success';
+                                badgeText = 'Newest';
+                                positionIcon = '<i class="bi bi-arrow-up-circle me-1"></i>';
+                            } else if (isOldest) {
+                                badgeClass = 'bg-warning text-dark';
+                                badgeText = 'Oldest';
+                                positionIcon = '<i class="bi bi-arrow-down-circle me-1"></i>';
+                            } else {
+                                badgeClass = 'bg-secondary';
+                                badgeText = `#${index + 1}`;
+                                positionIcon = '';
+                            }
+
+                            return `
                             <div class="col-md-6 col-lg-4">
-                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2">
+                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ${isNewest ? 'border border-success' : isOldest ? 'border border-warning' : ''}">
                                     <span class="text-monospace fw-bold flex-grow-1">${ip}</span>
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="badge bg-secondary rounded-pill">#${index + 1}</span>
+                                        <span class="badge ${badgeClass} rounded-pill">${positionIcon}${badgeText}</span>
                                         <button class="btn btn-outline-danger btn-sm remove-temp-ip-btn" data-ip="${ip}" title="Remove IP">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </div>
                                 </div>
                             </div>
-                        `).join('');
+                            `;
+                        }).join('');
                     } else {
                         poolEmpty.style.display = 'block';
                         poolContainer.innerHTML = '';
