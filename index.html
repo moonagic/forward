@@ -750,6 +750,10 @@
             </a>
             <div class="d-flex align-items-center gap-2">
                 <span id="client-ip" class="navbar-text text-muted fs-sm d-none d-md-block"></span>
+                <button id="logout-btn" class="btn btn-outline-danger btn-sm rounded-pill px-3">
+                    <i class="bi bi-box-arrow-right me-1"></i>
+                    <span class="d-none d-md-inline">Logout</span>
+                </button>
                 <button id="theme-switcher" class="btn border-0 rounded-pill p-2">
                     <i class="bi bi-sun-fill"></i>
                 </button>
@@ -847,6 +851,7 @@
             const allowCurrentIpBtn = document.getElementById('allow-current-ip');
             const refreshIpPoolBtn = document.getElementById('refresh-ip-pool');
             const themeSwitcherBtn = document.getElementById('theme-switcher');
+            const logoutBtn = document.getElementById('logout-btn');
             const htmlEl = document.documentElement;
 
             const toastEl = document.getElementById('liveToast');
@@ -1240,6 +1245,28 @@
 
             refreshIpPoolBtn.addEventListener('click', () => {
                 loadIPPool();
+            });
+
+            // Logout functionality
+            logoutBtn.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to logout?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/logout', {
+                        method: 'POST'
+                    });
+
+                    if (response.ok) {
+                        // Redirect to login page
+                        window.location.href = '/login';
+                    } else {
+                        showToast('Logout failed. Please try again.', true);
+                    }
+                } catch (error) {
+                    showToast('Logout failed. Please try again.', true);
+                }
             });
 
             // Handle temporary IP removal

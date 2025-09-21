@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +24,9 @@ import (
 
 //go:embed index.html
 var indexHTML []byte
+
+//go:embed login.html
+var loginHTML []byte
 
 const udpTimeout = 5 * time.Minute
 const configPath = "config.yml"
@@ -62,6 +68,23 @@ type IPPoolData struct {
 type RemoveIPRequest struct {
 	IP string `json:"ip"`
 }
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// Session management
+type Session struct {
+	ID        string
+	CreatedAt time.Time
+	LastSeen  time.Time
+}
+
+var (
+	sessions    = make(map[string]*Session)
+	sessionsMux = sync.RWMutex{}
+)
 
 // --- Global Manager ---
 
@@ -304,19 +327,96 @@ func (m *ForwarderManager) StopAll() {
 
 // --- Web Admin Handlers ---
 
-func basicAuth(handler http.HandlerFunc, username, password string) http.HandlerFunc {
+// Session-based authentication
+func generateSessionID() string {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
+func hashPassword(password string) string {
+	h := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(h[:])
+}
+
+func createSession() string {
+	sessionID := generateSessionID()
+	if sessionID == "" {
+		return ""
+	}
+
+	sessionsMux.Lock()
+	defer sessionsMux.Unlock()
+
+	now := time.Now()
+	sessions[sessionID] = &Session{
+		ID:        sessionID,
+		CreatedAt: now,
+		LastSeen:  now,
+	}
+
+	return sessionID
+}
+
+func validateSession(sessionID string) bool {
+	if sessionID == "" {
+		return false
+	}
+
+	sessionsMux.Lock()
+	defer sessionsMux.Unlock()
+
+	session, exists := sessions[sessionID]
+	if !exists {
+		return false
+	}
+
+	// Check if session is expired (24 hours)
+	if time.Since(session.CreatedAt) > 24*time.Hour {
+		delete(sessions, sessionID)
+		return false
+	}
+
+	// Update last seen time
+	session.LastSeen = time.Now()
+	return true
+}
+
+// Dual authentication: supports both session and basic auth
+func requireAuth(handler http.HandlerFunc, username, password string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Skip authentication if username/password not configured
 		if username == "" || password == "" {
 			handler(w, r)
 			return
 		}
-		user, pass, ok := r.BasicAuth()
-		if !ok || user != username || pass != password {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-			http.Error(w, "Unauthorized.", http.StatusUnauthorized)
+
+		// Check for session cookie first
+		cookie, err := r.Cookie("session_id")
+		if err == nil && validateSession(cookie.Value) {
+			handler(w, r)
 			return
 		}
-		handler(w, r)
+
+		// Check for Basic Auth (for API clients)
+		user, pass, ok := r.BasicAuth()
+		if ok && user == username && pass == password {
+			handler(w, r)
+			return
+		}
+
+		// For API endpoints, return 401 with WWW-Authenticate header
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("WWW-Authenticate", `Basic realm="API Access"`)
+			http.Error(w, "Unauthorized. Use Basic Auth or session cookie.", http.StatusUnauthorized)
+			return
+		}
+
+		// For web pages, redirect to login page
+		http.Redirect(w, r, "/login", http.StatusFound)
 	}
 }
 
@@ -546,17 +646,91 @@ func reloadConfigAndForwarders(newConfig Config) error {
 	return nil
 }
 
+func loginHandler(w http.ResponseWriter, r *http.Request, auth BasicAuth) {
+	if r.Method == http.MethodGet {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(loginHTML)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var loginReq LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate credentials
+	if loginReq.Username != auth.Username || loginReq.Password != auth.Password {
+		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+		return
+	}
+
+	// Create session
+	sessionID := createSession()
+	if sessionID == "" {
+		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		return
+	}
+
+	// Set session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    sessionID,
+		Path:     "/",
+		MaxAge:   24 * 60 * 60, // 24 hours
+		HttpOnly: true,
+		Secure:   false, // Set to true if using HTTPS
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Login successful"))
+}
+
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get session cookie
+	cookie, err := r.Cookie("session_id")
+	if err == nil {
+		// Remove session from memory
+		sessionsMux.Lock()
+		delete(sessions, cookie.Value)
+		sessionsMux.Unlock()
+	}
+
+	// Clear session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Logout successful"))
+}
+
 func startAdminServer(addr string, auth BasicAuth) {
 	if addr == "" {
 		log.Println("admin_addr not configured, web admin interface not started.")
 		return
 	}
 
-	configHandlerWithAuth := basicAuth(configHandler, auth.Username, auth.Password)
-	allowHandlerWithAuth := basicAuth(allowHandler, auth.Username, auth.Password)
-	removeTempIPHandlerWithAuth := basicAuth(removeTempIPHandler, auth.Username, auth.Password)
-	allowMyIPHandlerWithAuth := basicAuth(allowMyIPHandler, auth.Username, auth.Password)
-	rootHandlerWithAuth := basicAuth(func(w http.ResponseWriter, r *http.Request) {
+	configHandlerWithAuth := requireAuth(configHandler, auth.Username, auth.Password)
+	allowHandlerWithAuth := requireAuth(allowHandler, auth.Username, auth.Password)
+	removeTempIPHandlerWithAuth := requireAuth(removeTempIPHandler, auth.Username, auth.Password)
+	allowMyIPHandlerWithAuth := requireAuth(allowMyIPHandler, auth.Username, auth.Password)
+	rootHandlerWithAuth := requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(indexHTML)
 	}, auth.Username, auth.Password)
@@ -582,12 +756,19 @@ func startAdminServer(addr string, auth BasicAuth) {
 		})
 	}
 
+	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		loginHandler(w, r, auth)
+	})
+	http.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
+		loginHandler(w, r, auth)
+	})
+	http.HandleFunc("/api/logout", logoutHandler)
 	http.HandleFunc("/api/config", configHandlerWithAuth)
 	http.HandleFunc("/api/allow", allowHandlerWithAuth)
 	http.HandleFunc("/api/remove-temp-ip", removeTempIPHandlerWithAuth)
 	http.HandleFunc("/api/allow-my-ip", allowMyIPHandlerWithAuth)
-	http.HandleFunc("/api/ip", basicAuth(ipHandler, auth.Username, auth.Password))
-	http.HandleFunc("/api/ip-pool", basicAuth(ipPoolHandler, auth.Username, auth.Password))
+	http.HandleFunc("/api/ip", requireAuth(ipHandler, auth.Username, auth.Password))
+	http.HandleFunc("/api/ip-pool", requireAuth(ipPoolHandler, auth.Username, auth.Password))
 	http.HandleFunc("/", rootHandlerWithAuth)
 
 	log.Printf("Starting web admin interface, listening on http://%s", addr)
