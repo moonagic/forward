@@ -40,9 +40,10 @@ type BasicAuth struct {
 }
 
 type Config struct {
-	AdminAddr string    `yaml:"admin_addr" json:"admin_addr"`
-	BasicAuth BasicAuth `yaml:"basic_auth" json:"basic_auth"`
-	Forwards  []Forward `yaml:"forwards" json:"forwards"`
+	AdminAddr        string    `yaml:"admin_addr" json:"admin_addr"`
+	BasicAuth        BasicAuth `yaml:"basic_auth" json:"basic_auth"`
+	Forwards         []Forward `yaml:"forwards" json:"forwards"`
+	TempIPPoolSize   int       `yaml:"temp_ip_pool_size" json:"temp_ip_pool_size"`
 }
 
 type Forward struct {
@@ -89,7 +90,7 @@ var (
 // --- Global Manager ---
 
 var manager = NewForwarderManager()
-var tempIPPool = NewTempIPPool(10, ipPoolPath)
+var tempIPPool *TempIPPool
 
 // --- Temporary IP Pool ---
 
@@ -790,6 +791,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to parse config.yml: %v", err)
 	}
+
+	// Set default temp IP pool size if not configured
+	if config.TempIPPoolSize <= 0 {
+		config.TempIPPoolSize = 10
+	}
+
+	// Initialize temporary IP pool with configured size
+	tempIPPool = NewTempIPPool(config.TempIPPoolSize, ipPoolPath)
 
 	if errs := checkPortsAvailability(config.Forwards); len(errs) > 0 {
 		for _, err := range errs {
