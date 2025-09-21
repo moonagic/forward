@@ -35,3 +35,4 @@ config.yml
 bin/
 __debug*
 ip_pool.json
+.DS_Store
