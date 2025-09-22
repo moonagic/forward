@@ -37,6 +37,9 @@ var serviceWorkerJS []byte
 //go:embed browserconfig.xml
 var browserconfigXML []byte
 
+//go:embed shield-icon.svg
+var shieldIconSVG []byte
+
 const udpTimeout = 5 * time.Minute
 const configPath = "config.yml"
 const ipPoolPath = "ip_pool.json"
@@ -792,6 +795,10 @@ func startAdminServer(addr string, auth BasicAuth) {
 	http.HandleFunc("/browserconfig.xml", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.Write(browserconfigXML)
+	})
+	http.HandleFunc("/shield-icon.svg", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Write(shieldIconSVG)
 	})
 
 	http.HandleFunc("/", rootHandlerWithAuth)

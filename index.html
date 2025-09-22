@@ -7,14 +7,17 @@
     <meta name="theme-color" content="#f8f9fa">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Port Forwarder">
+    <meta name="apple-mobile-web-app-title" content="Forward">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="Port Forwarder">
+    <meta name="application-name" content="Forward">
     <meta name="msapplication-TileColor" content="#0d6efd">
     <meta name="msapplication-config" content="browserconfig.xml">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiBmaWxsPSIjMGQ2ZWZkIi8+Cjx0ZXh0IHg9Ijk2IiB5PSIxMzQiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSI5NiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5GVzwvdGV4dD4KPHRleHQgeD0iOTYiIHk9IjE2OCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0ibm9ybWFsIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuOCkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlBPUlQgRk9SV0FSREVSPC90ZXh0Pgo8L3N2Zz4=">
-    <title>Port Forwarder Configuration</title>
+    <link rel="icon" href="/shield-icon.svg" type="image/svg+xml">
+    <link rel="shortcut icon" href="/shield-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon"
+        href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgICA8dGl0bGU+RXhwYW5kZWQgVG9wIFNoaWVsZCBJY29uPC90aXRsZT4KICAgIDwhLS0gQmFja2dyb3VuZCBDb2xvciAtLT4KICAgIDxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSIjZjhmOWZhIi8+CgogICAgPCEtLSBTaGllbGQgd2l0aCBPdXR3YXJkIEN1cnZlZCBUb3AgLS0+CiAgICA8cGF0aCAKICAgICAgICBkPSJNIDY0LDExOCBDIDQwLDEwMCAxMiw3NSAxMiwyMCBRIDY0LDggMTE2LDIwIEMgMTE2LDc1IDg4LDEwMCA2NCwxMTggWiIKICAgICAgICBmaWxsPSIjMGQ2ZWZkIgogICAgICAgIHN0cm9rZT0iIzBhNThjYSIKICAgICAgICBzdHJva2Utd2lkdGg9IjgiCiAgICAgICAgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIKICAgIC8+Cjwvc3ZnPgo=">
+    <title>Forward Configuration</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
@@ -42,8 +45,8 @@
 
         body {
             background: linear-gradient(135deg,
-                rgb(var(--bs-body-bg-rgb)) 0%,
-                rgba(var(--primary-rgb), 0.05) 100%);
+                    rgb(var(--bs-body-bg-rgb)) 0%,
+                    rgba(var(--primary-rgb), 0.05) 100%);
             min-height: 100vh;
             transition: all 0.3s ease;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -66,8 +69,10 @@
 
         /* Safari专用修复 - 极端强制固定 */
         @supports (-webkit-touch-callout: none) {
+
             /* 完全禁用Safari的所有滚动行为影响 */
-            html, body {
+            html,
+            body {
                 -webkit-overflow-scrolling: auto !important;
                 overscroll-behavior: none !important;
                 -webkit-transform: translateZ(0) !important;
@@ -198,6 +203,7 @@
                 opacity: 0;
                 transform: translateY(30px) scale(0.95);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0) scale(1);
@@ -212,7 +218,9 @@
         }
 
         @media (min-width: 576px) {
-            .container { max-width: 540px; }
+            .container {
+                max-width: 540px;
+            }
         }
 
         @media (min-width: 768px) {
@@ -224,15 +232,21 @@
         }
 
         @media (min-width: 992px) {
-            .container { max-width: 960px; }
+            .container {
+                max-width: 960px;
+            }
         }
 
         @media (min-width: 1200px) {
-            .container { max-width: 1140px; }
+            .container {
+                max-width: 1140px;
+            }
         }
 
         @media (min-width: 1400px) {
-            .container { max-width: 1320px; }
+            .container {
+                max-width: 1320px;
+            }
         }
 
         /* 移动端简化 */
@@ -258,190 +272,189 @@
             }
         }
 
-            .navbar-brand {
-                font-size: 1.1rem;
-            }
+        .navbar-brand {
+            font-size: 1.1rem;
+        }
 
-            .btn-delete {
-                width: 2.5rem !important;
-                height: 2.5rem !important;
-                top: 0.75rem;
-                right: 0.75rem;
-                min-width: 2.5rem !important;
-                min-height: 2.5rem !important;
-                max-width: 2.5rem !important;
-                max-height: 2.5rem !important;
-                border-radius: 50% !important;
-                flex-shrink: 0 !important;
-                padding: 0 !important;
-                line-height: 1 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-            }
+        .btn-delete {
+            width: 2.5rem !important;
+            height: 2.5rem !important;
+            top: 0.75rem;
+            right: 0.75rem;
+            min-width: 2.5rem !important;
+            min-height: 2.5rem !important;
+            max-width: 2.5rem !important;
+            max-height: 2.5rem !important;
+            border-radius: 50% !important;
+            flex-shrink: 0 !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
 
-            .card-body {
-                padding: 1rem;
-            }
+        .card-body {
+            padding: 1rem;
+        }
 
-            .fs-sm {
-                font-size: 0.8rem !important;
-            }
+        .fs-sm {
+            font-size: 0.8rem !important;
+        }
 
-            .btn-group-mobile {
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-            }
+        .btn-group-mobile {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
 
-            .btn-group-mobile .btn {
-                width: 100%;
-                text-align: center;
-            }
+        .btn-group-mobile .btn {
+            width: 100%;
+            text-align: center;
+        }
 
-            .input-group-mobile {
-                flex-direction: column;
-                width: 100%;
-            }
+        .input-group-mobile {
+            flex-direction: column;
+            width: 100%;
+        }
 
-            .input-group-mobile .form-control {
-                border-radius: 12px !important;
-                margin-bottom: 0.5rem;
-                width: 100% !important;
-                flex: none;
-                height: 44px !important;
-            }
+        .input-group-mobile .form-control {
+            border-radius: 12px !important;
+            margin-bottom: 0.5rem;
+            width: 100% !important;
+            flex: none;
+            height: 44px !important;
+        }
 
-            .input-group-mobile .btn {
-                border-radius: 12px !important;
-                width: 100%;
-                flex: none;
-                height: 44px !important;
-                min-height: 44px !important;
-                max-height: 44px !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                flex-shrink: 0 !important;
-            }
+        .input-group-mobile .btn {
+            border-radius: 12px !important;
+            width: 100%;
+            flex: none;
+            height: 44px !important;
+            min-height: 44px !important;
+            max-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+        }
 
-            /* Override Bootstrap input-group behavior on mobile */
-            .input-group-mobile.input-group {
-                display: flex;
-                flex-wrap: wrap;
-            }
+        /* Override Bootstrap input-group behavior on mobile */
+        .input-group-mobile.input-group {
+            display: flex;
+            flex-wrap: wrap;
+        }
 
-            .input-group-mobile.input-group > * {
-                width: 100% !important;
-                flex: none !important;
-            }
+        .input-group-mobile.input-group>* {
+            width: 100% !important;
+            flex: none !important;
+        }
 
-            /* Force button height controls for mobile - ALL BUTTONS */
-            .remove-ip-btn,
-            .input-group-mobile .btn,
-            .rule .input-group .btn {
-                height: 44px !important;
-                max-height: 44px !important;
-                min-height: 44px !important;
-                border-radius: 8px !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                flex-shrink: 0 !important;
-                padding: 0.5rem 1rem !important;
-                font-size: 0.875rem !important;
-                gap: 0.5rem !important;
-            }
+        /* Force button height controls for mobile - ALL BUTTONS */
+        .remove-ip-btn,
+        .input-group-mobile .btn,
+        .rule .input-group .btn {
+            height: 44px !important;
+            max-height: 44px !important;
+            min-height: 44px !important;
+            border-radius: 8px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+            padding: 0.5rem 1rem !important;
+            font-size: 0.875rem !important;
+            gap: 0.5rem !important;
+        }
 
-            /* Style remove buttons specifically */
-            .remove-ip-btn {
-                background-color: var(--bs-danger) !important;
-                border-color: var(--bs-danger) !important;
-                color: white !important;
-                width: 100% !important;
-                border-radius: 8px !important;
-            }
+        /* Style remove buttons specifically */
+        .remove-ip-btn {
+            background-color: var(--bs-danger) !important;
+            border-color: var(--bs-danger) !important;
+            color: white !important;
+            width: 100% !important;
+            border-radius: 8px !important;
+        }
 
-            .remove-ip-btn:hover {
-                background-color: var(--bs-danger) !important;
-                border-color: var(--bs-danger) !important;
-                opacity: 0.9 !important;
-            }
+        .remove-ip-btn:hover {
+            background-color: var(--bs-danger) !important;
+            border-color: var(--bs-danger) !important;
+            opacity: 0.9 !important;
+        }
 
-            /* Force button height controls for mobile */
-            .input-group-mobile .btn,
-            .rule .input-group .btn,
-            .remove-ip-btn {
-                height: 44px !important;
-                max-height: 44px !important;
-                min-height: 44px !important;
-                line-height: 1.2 !important;
-                padding: 0.5rem 0.75rem !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                flex-shrink: 0 !important;
-                align-self: flex-start !important;
-            }
+        /* Force button height controls for mobile */
+        .input-group-mobile .btn,
+        .rule .input-group .btn,
+        .remove-ip-btn {
+            height: 44px !important;
+            max-height: 44px !important;
+            min-height: 44px !important;
+            line-height: 1.2 !important;
+            padding: 0.5rem 0.75rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+            align-self: flex-start !important;
+        }
 
-            /* Ensure all input-groups in rules are mobile-friendly */
-            .rule .input-group {
-                display: flex !important;
-                flex-direction: column !important;
-                width: 100% !important;
-                align-items: stretch !important;
-            }
+        /* Ensure all input-groups in rules are mobile-friendly */
+        .rule .input-group {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            align-items: stretch !important;
+        }
 
-            .rule .input-group .form-control {
-                width: 100% !important;
-                margin-bottom: 0.5rem !important;
-                border-radius: 12px !important;
-                height: 44px !important;
-            }
+        .rule .input-group .form-control {
+            width: 100% !important;
+            margin-bottom: 0.5rem !important;
+            border-radius: 12px !important;
+            height: 44px !important;
+        }
 
-            .rule .input-group .btn {
-                width: 100% !important;
-                border-radius: 8px !important;
-                height: 44px !important;
-                min-height: 44px !important;
-                max-height: 44px !important;
-                align-self: flex-start !important;
-                flex: none !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                flex-shrink: 0 !important;
-                padding: 0.5rem 1rem !important;
-                font-size: 0.875rem !important;
-                gap: 0.5rem !important;
-            }
+        .rule .input-group .btn {
+            width: 100% !important;
+            border-radius: 8px !important;
+            height: 44px !important;
+            min-height: 44px !important;
+            max-height: 44px !important;
+            align-self: flex-start !important;
+            flex: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+            padding: 0.5rem 1rem !important;
+            font-size: 0.875rem !important;
+            gap: 0.5rem !important;
+        }
 
-            /* Style remove buttons specifically */
-            .remove-ip-btn {
-                background-color: #dc3545 !important;
-                border-color: #dc3545 !important;
-                color: white !important;
-                border-radius: 8px !important;
-            }
+        /* Style remove buttons specifically */
+        .remove-ip-btn {
+            background-color: #dc3545 !important;
+            border-color: #dc3545 !important;
+            color: white !important;
+            border-radius: 8px !important;
+        }
 
-            .remove-ip-btn:hover {
-                background-color: #bb2d3b !important;
-                border-color: #bb2d3b !important;
-            }
+        .remove-ip-btn:hover {
+            background-color: #bb2d3b !important;
+            border-color: #bb2d3b !important;
+        }
 
-            /* Style Add IP button */
-            .add-ip-btn {
-                border-radius: 8px !important;
-                height: 40px !important;
-                min-height: 40px !important;
-                max-height: 40px !important;
-                padding: 0.5rem 1rem !important;
-                font-size: 0.875rem !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                gap: 0.5rem !important;
-            }
+        /* Style Add IP button */
+        .add-ip-btn {
+            border-radius: 8px !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            max-height: 40px !important;
+            padding: 0.5rem 1rem !important;
+            font-size: 0.875rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0.5rem !important;
         }
 
         /* Tablet responsive design */
@@ -470,6 +483,7 @@
 
         /* Large desktop optimization */
         @media (min-width: 1200px) {
+
             .btn-group-mobile,
             .btn-group-tablet {
                 display: flex;
@@ -557,8 +571,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Dark mode specific enhancements */
@@ -593,172 +612,171 @@
             }
         }
 
-            .container {
-                padding-left: 0.75rem;
-                padding-right: 0.75rem;
-            }
+        .container {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
 
-            .card-header .card-title {
-                font-size: 1rem;
-            }
+        .card-header .card-title {
+            font-size: 1rem;
+        }
 
-            .badge {
-                font-size: 0.7rem;
-            }
+        .badge {
+            font-size: 0.7rem;
+        }
 
-            .text-monospace {
-                font-size: 0.85rem;
-            }
+        .text-monospace {
+            font-size: 0.85rem;
+        }
 
-            h1 {
-                font-size: 1.5rem;
-            }
+        h1 {
+            font-size: 1.5rem;
+        }
 
-            .btn-delete {
-                width: 2.5rem !important;
-                height: 2.5rem !important;
-                top: 0.75rem;
-                right: 0.75rem;
-                min-width: 2.5rem !important;
-                min-height: 2.5rem !important;
-                max-width: 2.5rem !important;
-                max-height: 2.5rem !important;
-                border-radius: 50% !important;
-                flex-shrink: 0 !important;
-                padding: 0 !important;
-                line-height: 1 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-            }
+        .btn-delete {
+            width: 2.5rem !important;
+            height: 2.5rem !important;
+            top: 0.75rem;
+            right: 0.75rem;
+            min-width: 2.5rem !important;
+            min-height: 2.5rem !important;
+            max-width: 2.5rem !important;
+            max-height: 2.5rem !important;
+            border-radius: 50% !important;
+            flex-shrink: 0 !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
 
-            /* Ensure button text fits properly */
-            .btn {
-                font-size: 0.9rem;
-                padding: 0.5rem 0.75rem;
-            }
+        /* Ensure button text fits properly */
+        .btn {
+            font-size: 0.9rem;
+            padding: 0.5rem 0.75rem;
+        }
 
-            .btn-sm {
-                font-size: 0.8rem;
-                padding: 0.375rem 0.5rem;
-            }
+        .btn-sm {
+            font-size: 0.8rem;
+            padding: 0.375rem 0.5rem;
+        }
 
-            /* Allow text wrapping for longer button labels */
-            .btn span {
-                white-space: normal;
-                line-height: 1.2;
-            }
+        /* Allow text wrapping for longer button labels */
+        .btn span {
+            white-space: normal;
+            line-height: 1.2;
+        }
 
-            /* Force full width for IP input containers */
-            .allowed-ips-list {
-                width: 100%;
-            }
+        /* Force full width for IP input containers */
+        .allowed-ips-list {
+            width: 100%;
+        }
 
-            .allowed-ips-list .input-group,
-            .allowed-ips-list .input-group-mobile {
-                width: 100% !important;
-                display: flex !important;
-                flex-direction: column !important;
-            }
+        .allowed-ips-list .input-group,
+        .allowed-ips-list .input-group-mobile {
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
 
-            .allowed-ips-list .form-control,
-            .allowed-ips-list .rule-allowed-ip {
-                width: 100% !important;
-                margin-bottom: 0.5rem !important;
-                border-radius: 12px !important;
-                min-width: 0 !important;
-                flex: none !important;
-            }
+        .allowed-ips-list .form-control,
+        .allowed-ips-list .rule-allowed-ip {
+            width: 100% !important;
+            margin-bottom: 0.5rem !important;
+            border-radius: 12px !important;
+            min-width: 0 !important;
+            flex: none !important;
+        }
 
-            .allowed-ips-list .btn,
-            .allowed-ips-list .remove-ip-btn {
-                width: 100% !important;
-                border-radius: 12px !important;
-                flex: none !important;
-                height: auto !important;
-                min-height: 44px !important;
-                max-height: 48px !important;
-                align-self: flex-start !important;
-            }
+        .allowed-ips-list .btn,
+        .allowed-ips-list .remove-ip-btn {
+            width: 100% !important;
+            border-radius: 12px !important;
+            flex: none !important;
+            height: auto !important;
+            min-height: 44px !important;
+            max-height: 48px !important;
+            align-self: flex-start !important;
+        }
 
-            /* Ensure rule form controls take full width */
-            .rule-from,
-            .rule-to {
-                width: 100% !important;
-            }
+        /* Ensure rule form controls take full width */
+        .rule-from,
+        .rule-to {
+            width: 100% !important;
+        }
 
-            /* Override any Bootstrap input-group styles on mobile */
-            .card-body .input-group {
-                width: 100% !important;
-                flex-direction: column !important;
-                align-items: stretch !important;
-            }
+        /* Override any Bootstrap input-group styles on mobile */
+        .card-body .input-group {
+            width: 100% !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+        }
 
-            .card-body .input-group > * {
-                width: 100% !important;
-                flex: none !important;
-                border-radius: 12px !important;
-            }
+        .card-body .input-group>* {
+            width: 100% !important;
+            flex: none !important;
+            border-radius: 12px !important;
+        }
 
-            .card-body .input-group .form-control {
-                margin-bottom: 0.5rem !important;
-            }
+        .card-body .input-group .form-control {
+            margin-bottom: 0.5rem !important;
+        }
 
-            .card-body .input-group .btn {
-                height: auto !important;
-                min-height: 44px !important;
-                max-height: 48px !important;
-                align-self: flex-start !important;
-            }
+        .card-body .input-group .btn {
+            height: auto !important;
+            min-height: 44px !important;
+            max-height: 48px !important;
+            align-self: flex-start !important;
+        }
 
-            /* Specific fix for IP input fields in rules */
-            .rule .input-group {
-                display: flex !important;
-                flex-direction: column !important;
-                width: 100% !important;
-                align-items: stretch !important;
-            }
+        /* Specific fix for IP input fields in rules */
+        .rule .input-group {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            align-items: stretch !important;
+        }
 
-            .rule .input-group .form-control {
-                width: 100% !important;
-                margin-bottom: 0.5rem !important;
-                border-radius: 12px !important;
-                border-top-right-radius: 12px !important;
-                border-bottom-right-radius: 12px !important;
-            }
+        .rule .input-group .form-control {
+            width: 100% !important;
+            margin-bottom: 0.5rem !important;
+            border-radius: 12px !important;
+            border-top-right-radius: 12px !important;
+            border-bottom-right-radius: 12px !important;
+        }
 
-            .rule .input-group .btn {
-                width: 100% !important;
-                border-radius: 8px !important;
-                border-top-left-radius: 8px !important;
-                border-bottom-left-radius: 8px !important;
-                height: 44px !important;
-                min-height: 44px !important;
-                max-height: 44px !important;
-                align-self: flex-start !important;
-                flex: none !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                flex-shrink: 0 !important;
-                padding: 0.5rem 1rem !important;
-                font-size: 0.875rem !important;
-                gap: 0.5rem !important;
-            }
+        .rule .input-group .btn {
+            width: 100% !important;
+            border-radius: 8px !important;
+            border-top-left-radius: 8px !important;
+            border-bottom-left-radius: 8px !important;
+            height: 44px !important;
+            min-height: 44px !important;
+            max-height: 44px !important;
+            align-self: flex-start !important;
+            flex: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+            padding: 0.5rem 1rem !important;
+            font-size: 0.875rem !important;
+            gap: 0.5rem !important;
+        }
 
-            /* Style Add IP button */
-            .add-ip-btn {
-                border-radius: 8px !important;
-                height: 40px !important;
-                min-height: 40px !important;
-                max-height: 40px !important;
-                padding: 0.5rem 1rem !important;
-                font-size: 0.875rem !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                gap: 0.5rem !important;
-            }
+        /* Style Add IP button */
+        .add-ip-btn {
+            border-radius: 8px !important;
+            height: 40px !important;
+            min-height: 40px !important;
+            max-height: 40px !important;
+            padding: 0.5rem 1rem !important;
+            font-size: 0.875rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0.5rem !important;
         }
 
         /* Touch-friendly improvements */
@@ -775,7 +793,8 @@
 
             .form-control {
                 min-height: 44px;
-                font-size: 16px; /* Prevents zoom on iOS */
+                font-size: 16px;
+                /* Prevents zoom on iOS */
             }
 
             .form-check-input {
@@ -811,7 +830,7 @@
         <div class="container">
             <a class="navbar-brand fw-bold" href="#">
                 <i class="bi bi-hdd-network-fill text-primary"></i>
-                <span>Port Forwarder</span>
+                <span>Forward</span>
             </a>
             <div class="d-flex align-items-center gap-2">
                 <span id="client-ip" class="navbar-text text-muted fs-sm d-none d-md-block"></span>
@@ -864,7 +883,8 @@
             <div class="card-body">
                 <p class="text-muted mb-3">
                     <i class="bi bi-info-circle me-1"></i>
-                    <span>These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used) eviction when full.</span>
+                    <span>These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used)
+                        eviction when full.</span>
                     <br><small class="text-success">
                         <i class="bi bi-arrow-up-circle"></i>
                         <strong>Top = Newest</strong>

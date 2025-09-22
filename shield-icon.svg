@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+    <title>Expanded Top Shield Icon</title>
+    <!-- Background Color -->
+    <rect width="128" height="128" fill="#f8f9fa"/>
+
+    <!-- Shield with Outward Curved Top -->
+    <path 
+        d="M 64,118 C 40,100 12,75 12,20 Q 64,8 116,20 C 116,75 88,100 64,118 Z"
+        fill="#0d6efd"
+        stroke="#0a58ca"
+        stroke-width="8"
+        stroke-linejoin="round"
+    />
+</svg>
