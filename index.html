@@ -6,7 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#f8f9fa">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Port Forwarder">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Port Forwarder">
+    <meta name="msapplication-TileColor" content="#0d6efd">
+    <meta name="msapplication-config" content="browserconfig.xml">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiBmaWxsPSIjMGQ2ZWZkIi8+Cjx0ZXh0IHg9Ijk2IiB5PSIxMzQiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSI5NiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5GVzwvdGV4dD4KPHRleHQgeD0iOTYiIHk9IjE2OCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0ibm9ybWFsIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuOCkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlBPUlQgRk9SV0FSREVSPC90ZXh0Pgo8L3N2Zz4=">
     <title>Port Forwarder Configuration</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -40,48 +47,72 @@
             min-height: 100vh;
             transition: all 0.3s ease;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            padding-top: calc(70px + env(safe-area-inset-top));
+            padding-top: 70px;
         }
 
+        /* 简单直接的固定导航栏 */
         .navbar {
-            background: var(--glassmorphism-bg);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
-            position: -webkit-sticky;
-            position: sticky;
-            top: 0;
-            z-index: 1030;
-            padding-top: env(safe-area-inset-top);
-            margin-top: calc(-1 * env(safe-area-inset-top));
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            z-index: 1030 !important;
+            background: var(--glassmorphism-bg) !important;
+            backdrop-filter: blur(20px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.1) !important;
         }
 
-        /* iOS Safari specific status bar fix */
+        /* Safari专用修复 - 极端强制固定 */
         @supports (-webkit-touch-callout: none) {
-            body {
-                padding-top: calc(70px + env(safe-area-inset-top));
+            /* 完全禁用Safari的所有滚动行为影响 */
+            html, body {
+                -webkit-overflow-scrolling: auto !important;
+                overscroll-behavior: none !important;
+                -webkit-transform: translateZ(0) !important;
+                -webkit-perspective: 1000 !important;
+                -webkit-backface-visibility: hidden !important;
             }
 
             .navbar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                padding-top: env(safe-area-inset-top);
-                padding-left: max(1rem, env(safe-area-inset-left));
-                padding-right: max(1rem, env(safe-area-inset-right));
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                transform: translateZ(0) !important;
+                -webkit-transform: translateZ(0) !important;
+                -webkit-perspective: 1000 !important;
+                -webkit-backface-visibility: hidden !important;
+                isolation: isolate !important;
+                will-change: auto !important;
+                contain: layout style paint !important;
             }
 
-            /* Force dark status bar area background */
+            /* 强制浏览器重新计算布局 */
             .navbar::before {
-                content: '';
+                content: "";
                 position: absolute;
-                top: calc(-1 * env(safe-area-inset-top));
+                top: -1px;
                 left: 0;
                 right: 0;
-                height: env(safe-area-inset-top);
-                background: var(--glassmorphism-bg);
+                height: 1px;
+                background: transparent;
                 z-index: -1;
+            }
+        }
+
+        /* iOS Safari 安全区域处理 */
+        @supports (-webkit-touch-callout: none) {
+            @media not (display-mode: standalone) {
+                body {
+                    padding-top: calc(70px + env(safe-area-inset-top)) !important;
+                }
+
+                .navbar {
+                    padding-top: env(safe-area-inset-top) !important;
+                    height: calc(70px + env(safe-area-inset-top)) !important;
+                }
             }
         }
 
@@ -204,11 +235,28 @@
             .container { max-width: 1320px; }
         }
 
-        /* Mobile-first responsive design */
+        /* 移动端简化 */
         @media (max-width: 767.98px) {
             body {
-                padding-top: calc(68px + env(safe-area-inset-top));
+                padding-top: 68px !important;
             }
+
+            .navbar {
+                height: 68px !important;
+            }
+
+            @supports (-webkit-touch-callout: none) {
+                @media not (display-mode: standalone) {
+                    body {
+                        padding-top: calc(68px + env(safe-area-inset-top)) !important;
+                    }
+
+                    .navbar {
+                        height: calc(68px + env(safe-area-inset-top)) !important;
+                    }
+                }
+            }
+        }
 
             .navbar-brand {
                 font-size: 1.1rem;
@@ -522,11 +570,28 @@
             background: rgba(var(--card-bg-rgb), 0.8);
         }
 
-        /* Additional mobile optimizations */
+        /* 小屏幕简化 */
         @media (max-width: 575.98px) {
             body {
-                padding-top: calc(66px + env(safe-area-inset-top));
+                padding-top: 66px !important;
             }
+
+            .navbar {
+                height: 66px !important;
+            }
+
+            @supports (-webkit-touch-callout: none) {
+                @media not (display-mode: standalone) {
+                    body {
+                        padding-top: calc(66px + env(safe-area-inset-top)) !important;
+                    }
+
+                    .navbar {
+                        height: calc(66px + env(safe-area-inset-top)) !important;
+                    }
+                }
+            }
+        }
 
             .container {
                 padding-left: 0.75rem;
@@ -742,7 +807,7 @@
 
 <body>
 
-    <nav class="navbar navbar-expand-lg sticky-top shadow-sm">
+    <nav class="navbar navbar-expand-lg shadow-sm">
         <div class="container">
             <a class="navbar-brand fw-bold" href="#">
                 <i class="bi bi-hdd-network-fill text-primary"></i>
@@ -761,9 +826,9 @@
         </div>
     </nav>
 
-    <div class="container py-5">
+    <div class="container py-3">
         <div
-            class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 pb-3 border-bottom border-primary-subtle">
+            class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-3 pb-2 border-bottom border-primary-subtle">
             <h1 class="text-body-emphasis mb-3 mb-sm-0">Configuration Rules</h1>
             <div class="btn-group-mobile btn-group-tablet d-grid d-sm-flex gap-2 w-100 w-sm-auto">
                 <button id="add-rule" class="btn btn-primary">
@@ -843,7 +908,135 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        // Service Worker Registration and PWA Install Prompt
+        let deferredPrompt;
+        let installButton;
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', async () => {
+                try {
+                    const registration = await navigator.serviceWorker.register('/service-worker.js');
+                    console.log('[PWA] Service Worker registered:', registration);
+
+                    // Force update to get the latest service worker
+                    await registration.update();
+
+                    // Handle updates
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // New update available
+                                showUpdateAvailable();
+                            }
+                        });
+                    });
+                } catch (error) {
+                    console.error('[PWA] Service Worker registration failed:', error);
+                }
+            });
+        }
+
+        // PWA Install Prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showInstallButton();
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('[PWA] App was installed');
+            hideInstallButton();
+            deferredPrompt = null;
+        });
+
+        function showInstallButton() {
+            if (!installButton) {
+                installButton = document.createElement('button');
+                installButton.className = 'btn btn-outline-primary btn-sm position-fixed';
+                installButton.style.cssText = `
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1050;
+                    border-radius: 25px;
+                    padding: 0.5rem 1rem;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    backdrop-filter: blur(10px);
+                    background: rgba(255,255,255,0.9);
+                `;
+                installButton.innerHTML = '<i class="bi bi-download me-1"></i>Install App';
+                installButton.addEventListener('click', installApp);
+                document.body.appendChild(installButton);
+            }
+            installButton.style.display = 'block';
+        }
+
+        function hideInstallButton() {
+            if (installButton) {
+                installButton.style.display = 'none';
+            }
+        }
+
+        async function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const result = await deferredPrompt.userChoice;
+                console.log('[PWA] User choice:', result);
+                deferredPrompt = null;
+                hideInstallButton();
+            }
+        }
+
+        function showUpdateAvailable() {
+            const updateBanner = document.createElement('div');
+            updateBanner.className = 'alert alert-info alert-dismissible fade show position-fixed';
+            updateBanner.style.cssText = `
+                top: 20px;
+                left: 20px;
+                right: 20px;
+                z-index: 1060;
+                max-width: 400px;
+                margin: 0 auto;
+            `;
+            updateBanner.innerHTML = `
+                <i class="bi bi-arrow-clockwise me-2"></i>
+                <strong>Update Available!</strong>
+                <span class="d-block d-sm-inline">Refresh to get the latest version.</span>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-primary" onclick="window.location.reload()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh Now
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(updateBanner);
+
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                if (updateBanner.parentNode) {
+                    updateBanner.remove();
+                }
+            }, 10000);
+        }
+
+
+        document.addEventListener('DOMContentLoaded', async () => {
+
+            // 检查认证状态
+            try {
+                const response = await fetch('/api/config');
+                if (!response.ok) {
+                    // 认证失败，跳转到登录页
+                    window.location.href = '/login';
+                    return;
+                }
+            } catch (error) {
+                // 网络错误，也跳转到登录页
+                window.location.href = '/login';
+                return;
+            }
+
             const rulesContainer = document.getElementById('rules-container');
             const addRuleBtn = document.getElementById('add-rule');
             const saveConfigBtn = document.getElementById('save-config');
@@ -963,7 +1156,7 @@
             };
 
             const updateStatusBarForTheme = (theme) => {
-                // Update theme-color meta tag for address bar
+                // Update theme-color meta tag for address bar and PWA status bar
                 let themeColorMeta = document.querySelector('meta[name="theme-color"]');
                 if (!themeColorMeta) {
                     themeColorMeta = document.createElement('meta');
@@ -971,14 +1164,22 @@
                     document.head.appendChild(themeColorMeta);
                 }
 
-                if (theme === 'dark') {
-                    themeColorMeta.content = '#0a0e18';
-                } else {
-                    themeColorMeta.content = '#f8f9fa';
+                // Update apple-mobile-web-app-status-bar-style for PWA
+                let statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+                if (!statusBarMeta) {
+                    statusBarMeta = document.createElement('meta');
+                    statusBarMeta.name = 'apple-mobile-web-app-status-bar-style';
+                    document.head.appendChild(statusBarMeta);
                 }
 
-                // Force a minimal layout reflow to trigger iOS status bar color update
-                document.body.style.paddingTop = document.body.style.paddingTop;
+                // For PWA mode, always use default to avoid overlap issues
+                if (theme === 'dark') {
+                    themeColorMeta.content = '#0a0e18';
+                    statusBarMeta.content = 'default';
+                } else {
+                    themeColorMeta.content = '#f8f9fa';
+                    statusBarMeta.content = 'default';
+                }
             };
 
             const preferredTheme = getStoredTheme() || 'light';

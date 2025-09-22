@@ -28,6 +28,15 @@ var indexHTML []byte
 //go:embed login.html
 var loginHTML []byte
 
+//go:embed manifest.json
+var manifestJSON []byte
+
+//go:embed service-worker.js
+var serviceWorkerJS []byte
+
+//go:embed browserconfig.xml
+var browserconfigXML []byte
+
 const udpTimeout = 5 * time.Minute
 const configPath = "config.yml"
 const ipPoolPath = "ip_pool.json"
@@ -770,6 +779,21 @@ func startAdminServer(addr string, auth BasicAuth) {
 	http.HandleFunc("/api/allow-my-ip", allowMyIPHandlerWithAuth)
 	http.HandleFunc("/api/ip", requireAuth(ipHandler, auth.Username, auth.Password))
 	http.HandleFunc("/api/ip-pool", requireAuth(ipPoolHandler, auth.Username, auth.Password))
+
+	// PWA files - served without authentication
+	http.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(manifestJSON)
+	})
+	http.HandleFunc("/service-worker.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Write(serviceWorkerJS)
+	})
+	http.HandleFunc("/browserconfig.xml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write(browserconfigXML)
+	})
+
 	http.HandleFunc("/", rootHandlerWithAuth)
 
 	log.Printf("Starting web admin interface, listening on http://%s", addr)
