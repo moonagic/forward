@@ -1095,7 +1095,7 @@
                         // 反转数组显示，让最新的IP在顶部
                         const reversedIps = [...data.ips].reverse();
 
-                        poolContainer.innerHTML = reversedIps.map((ip, displayIndex) => {
+                        poolContainer.innerHTML = reversedIps.map((ipEntry, displayIndex) => {
                             const originalIndex = data.ips.length - 1 - displayIndex;
                             const isNewest = originalIndex === data.ips.length - 1;
                             const isOldest = originalIndex === 0;
@@ -1125,12 +1125,36 @@
                                 riskLevel = '';
                             }
 
+                            // Format last triggered time
+                            const lastTriggered = new Date(ipEntry.last_triggered);
+                            const now = new Date();
+                            const diffMs = now - lastTriggered;
+                            const diffMins = Math.floor(diffMs / (1000 * 60));
+                            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                            let timeAgo;
+                            if (diffDays > 0) {
+                                timeAgo = `${diffDays}d ago`;
+                            } else if (diffHours > 0) {
+                                timeAgo = `${diffHours}h ago`;
+                            } else if (diffMins > 0) {
+                                timeAgo = `${diffMins}m ago`;
+                            } else {
+                                timeAgo = 'Just now';
+                            }
+
                             return `
                                 <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ip-pool-item ${riskLevel}">
-                                    <span class="text-monospace fw-bold flex-grow-1 me-2" style="word-break: break-all;">${ip}</span>
+                                    <div class="flex-grow-1 me-2">
+                                        <div class="text-monospace fw-bold" style="word-break: break-all;">${ipEntry.ip}</div>
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock me-1"></i>Last used: ${timeAgo}
+                                        </small>
+                                    </div>
                                     <div class="d-flex align-items-center gap-2 flex-shrink-0">
                                         <span class="badge ${badgeClass} rounded-pill">${positionIcon}${badgeText}</span>
-                                        <button class="btn btn-outline-danger btn-sm remove-temp-ip-btn" data-ip="${ip}" title="Remove IP">
+                                        <button class="btn btn-outline-danger btn-sm remove-temp-ip-btn" data-ip="${ipEntry.ip}" title="Remove IP">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </div>

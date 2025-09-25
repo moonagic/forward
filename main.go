@@ -65,17 +65,23 @@ type Forward struct {
 	AllowedIPs []string `yaml:"allowed_ips" json:"allowed_ips"`
 }
 
+// TempIPEntry represents a temporary IP with its last trigger time
+type TempIPEntry struct {
+	IP            string    `json:"ip"`
+	LastTriggered time.Time `json:"last_triggered"`
+}
+
 // TempIPPool manages a pool of temporarily allowed IPs with FIFO eviction
 type TempIPPool struct {
 	mu       sync.RWMutex
-	ips      []string         // FIFO queue of IPs
-	ipMap    map[string]bool  // Fast lookup
+	ips      []TempIPEntry        // FIFO queue of IPs with metadata
+	ipMap    map[string]*TempIPEntry  // Fast lookup with pointer to entry
 	maxSize  int
-	filePath string          // Path to persistent storage file
+	filePath string              // Path to persistent storage file
 }
 
 type IPPoolData struct {
-	IPs []string `json:"ips"`
+	IPs []TempIPEntry `json:"ips"`
 }
 
 type RemoveIPRequest struct {
@@ -108,8 +114,8 @@ var tempIPPool *TempIPPool
 
 func NewTempIPPool(maxSize int, filePath string) *TempIPPool {
 	pool := &TempIPPool{
-		ips:      make([]string, 0, maxSize),
-		ipMap:    make(map[string]bool),
+		ips:      make([]TempIPEntry, 0, maxSize),
+		ipMap:    make(map[string]*TempIPEntry),
 		maxSize:  maxSize,
 		filePath: filePath,
 	}
@@ -144,13 +150,14 @@ func (pool *TempIPPool) loadFromFile() error {
 	}
 
 	// Rebuild the pool from loaded data
-	pool.ips = make([]string, 0, pool.maxSize)
-	pool.ipMap = make(map[string]bool)
+	pool.ips = make([]TempIPEntry, 0, pool.maxSize)
+	pool.ipMap = make(map[string]*TempIPEntry)
 
-	for _, ip := range poolData.IPs {
+	for _, entry := range poolData.IPs {
 		if len(pool.ips) < pool.maxSize {
-			pool.ips = append(pool.ips, ip)
-			pool.ipMap[ip] = true
+			pool.ips = append(pool.ips, entry)
+			// Point to the entry in the slice
+			pool.ipMap[entry.IP] = &pool.ips[len(pool.ips)-1]
 		}
 	}
 
@@ -161,7 +168,7 @@ func (pool *TempIPPool) loadFromFile() error {
 // saveToFile saves the current IP pool to persistent storage
 func (pool *TempIPPool) saveToFile() error {
 	poolData := IPPoolData{
-		IPs: make([]string, len(pool.ips)),
+		IPs: make([]TempIPEntry, len(pool.ips)),
 	}
 	copy(poolData.IPs, pool.ips)
 
@@ -178,30 +185,37 @@ func (pool *TempIPPool) Add(ip string) bool {
 	defer pool.mu.Unlock()
 
 	var isNewIP = false
+	now := time.Now()
 
-	// If IP already exists, move it to the end (most recent)
-	if pool.ipMap[ip] {
-		// Find and remove the existing IP
-		for i, existingIP := range pool.ips {
-			if existingIP == ip {
+	// If IP already exists, move it to the end (most recent) and update timestamp
+	if existingEntry, exists := pool.ipMap[ip]; exists {
+		// Update the timestamp
+		existingEntry.LastTriggered = now
+
+		// Find and remove the existing IP entry
+		for i, entry := range pool.ips {
+			if entry.IP == ip {
 				pool.ips = append(pool.ips[:i], pool.ips[i+1:]...)
 				break
 			}
 		}
-		// Add it to the end
-		pool.ips = append(pool.ips, ip)
+		// Add it to the end with updated timestamp
+		newEntry := TempIPEntry{IP: ip, LastTriggered: now}
+		pool.ips = append(pool.ips, newEntry)
+		pool.ipMap[ip] = &pool.ips[len(pool.ips)-1]
 		isNewIP = false // IP already existed, just moved to top
 	} else {
 		// If we're at capacity, remove the oldest IP
 		if len(pool.ips) >= pool.maxSize {
-			oldestIP := pool.ips[0]
+			oldestEntry := pool.ips[0]
 			pool.ips = pool.ips[1:]
-			delete(pool.ipMap, oldestIP)
+			delete(pool.ipMap, oldestEntry.IP)
 		}
 
-		// Add the new IP
-		pool.ips = append(pool.ips, ip)
-		pool.ipMap[ip] = true
+		// Add the new IP with current timestamp
+		newEntry := TempIPEntry{IP: ip, LastTriggered: now}
+		pool.ips = append(pool.ips, newEntry)
+		pool.ipMap[ip] = &pool.ips[len(pool.ips)-1]
 		isNewIP = true // New IP added
 	}
 
@@ -216,13 +230,43 @@ func (pool *TempIPPool) Add(ip string) bool {
 func (pool *TempIPPool) Contains(ip string) bool {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
-	return pool.ipMap[ip]
+	_, exists := pool.ipMap[ip]
+	return exists
 }
 
-func (pool *TempIPPool) GetAll() []string {
+// UpdateTriggerTime updates the last trigger time for an IP and moves it to the most recent position
+func (pool *TempIPPool) UpdateTriggerTime(ip string) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	if existingEntry, exists := pool.ipMap[ip]; exists {
+		now := time.Now()
+		// Update the timestamp
+		existingEntry.LastTriggered = now
+
+		// Find and remove the existing IP entry
+		for i, entry := range pool.ips {
+			if entry.IP == ip {
+				pool.ips = append(pool.ips[:i], pool.ips[i+1:]...)
+				break
+			}
+		}
+		// Add it to the end with updated timestamp
+		newEntry := TempIPEntry{IP: ip, LastTriggered: now}
+		pool.ips = append(pool.ips, newEntry)
+		pool.ipMap[ip] = &pool.ips[len(pool.ips)-1]
+
+		// Save to file after modification
+		if err := pool.saveToFile(); err != nil {
+			log.Printf("Warning: Failed to save IP pool to file: %v", err)
+		}
+	}
+}
+
+func (pool *TempIPPool) GetAll() []TempIPEntry {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
-	result := make([]string, len(pool.ips))
+	result := make([]TempIPEntry, len(pool.ips))
 	copy(result, pool.ips)
 	return result
 }
@@ -232,13 +276,13 @@ func (pool *TempIPPool) Remove(ip string) bool {
 	defer pool.mu.Unlock()
 
 	// Check if IP exists
-	if !pool.ipMap[ip] {
+	if _, exists := pool.ipMap[ip]; !exists {
 		return false
 	}
 
 	// Find and remove the IP from slice
 	for i, existingIP := range pool.ips {
-		if existingIP == ip {
+		if existingIP.IP == ip {
 			pool.ips = append(pool.ips[:i], pool.ips[i+1:]...)
 			break
 		}
@@ -881,6 +925,8 @@ func isIPAllowed(remoteIP net.IP, allowedNets []*net.IPNet) bool {
 
 	// Check temporary IP pool
 	if tempIPPool.Contains(remoteIP.String()) {
+		// Update trigger time when IP is matched
+		tempIPPool.UpdateTriggerTime(remoteIP.String())
 		return true
 	}
 
