@@ -42,6 +42,9 @@ var browserconfigXML []byte
 //go:embed shield-icon.svg
 var shieldIconSVG []byte
 
+//go:embed duplicates.html
+var duplicatesHTML []byte
+
 const udpTimeout = 5 * time.Minute
 const configPath = "config.yml"
 const ipPoolPath = "ip_pool.json"
@@ -172,6 +175,71 @@ func logDuplicateRequest(requestID, clientIP string) error {
 	query := "INSERT INTO duplicate_requests (request_id, client_ip) VALUES (?, ?)"
 	_, err := db.Exec(query, requestID, clientIP)
 	return err
+}
+
+func getDuplicateRequests() ([]map[string]interface{}, error) {
+	query := `
+		SELECT id, request_id, client_ip, attempted_at
+		FROM duplicate_requests
+		ORDER BY attempted_at DESC
+	`
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var duplicates []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var requestID, clientIP, attemptedAt string
+		if err := rows.Scan(&id, &requestID, &clientIP, &attemptedAt); err != nil {
+			return nil, err
+		}
+
+		duplicates = append(duplicates, map[string]interface{}{
+			"id":           id,
+			"request_id":   requestID,
+			"client_ip":    clientIP,
+			"attempted_at": attemptedAt,
+		})
+	}
+
+	return duplicates, rows.Err()
+}
+
+func deleteDuplicateRequest(id int) error {
+	query := "DELETE FROM duplicate_requests WHERE id = ?"
+	result, err := db.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("duplicate request with id %d not found", id)
+	}
+
+	return nil
+}
+
+func clearAllDuplicateRequests() (int64, error) {
+	query := "DELETE FROM duplicate_requests"
+	result, err := db.Exec(query)
+	if err != nil {
+		return 0, err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	return rowsAffected, nil
 }
 
 func closeDatabase() {
@@ -918,6 +986,75 @@ func startAdminServer(addr string, auth BasicAuth) {
 		})
 	}
 
+	duplicateRequestsHandler := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		duplicates, err := getDuplicateRequests()
+		if err != nil {
+			log.Printf("Error fetching duplicate requests: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"duplicates": duplicates,
+			"count":      len(duplicates),
+		})
+	}
+
+	deleteDuplicateRequestHandler := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			ID int `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.ID <= 0 {
+			http.Error(w, "Invalid duplicate request ID", http.StatusBadRequest)
+			return
+		}
+
+		if err := deleteDuplicateRequest(req.ID); err != nil {
+			log.Printf("Error deleting duplicate request ID %d: %v", req.ID, err)
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		log.Printf("Deleted duplicate request ID %d", req.ID)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Duplicate request deleted successfully"))
+	}
+
+	clearAllDuplicatesHandler := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		rowsDeleted, err := clearAllDuplicateRequests()
+		if err != nil {
+			log.Printf("Error clearing all duplicate requests: %v", err)
+			http.Error(w, "Failed to clear duplicate requests", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Cleared %d duplicate request records", rowsDeleted)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("Successfully cleared %d duplicate request records", rowsDeleted)))
+	}
+
+
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		loginHandler(w, r, auth)
 	})
@@ -931,6 +1068,9 @@ func startAdminServer(addr string, auth BasicAuth) {
 	http.HandleFunc("/api/allow-my-ip", allowMyIPHandlerWithAuth)
 	http.HandleFunc("/api/ip", requireAuth(ipHandler, auth.Username, auth.Password))
 	http.HandleFunc("/api/ip-pool", requireAuth(ipPoolHandler, auth.Username, auth.Password))
+	http.HandleFunc("/api/duplicate-requests", requireAuth(duplicateRequestsHandler, auth.Username, auth.Password))
+	http.HandleFunc("/api/delete-duplicate-request", requireAuth(deleteDuplicateRequestHandler, auth.Username, auth.Password))
+	http.HandleFunc("/api/clear-all-duplicates", requireAuth(clearAllDuplicatesHandler, auth.Username, auth.Password))
 
 	// PWA files - served without authentication
 	http.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
@@ -950,6 +1090,10 @@ func startAdminServer(addr string, auth BasicAuth) {
 		w.Write(shieldIconSVG)
 	})
 
+	http.HandleFunc("/duplicates", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(duplicatesHTML)
+	}, auth.Username, auth.Password))
 	http.HandleFunc("/", rootHandlerWithAuth)
 
 	log.Printf("Starting web admin interface, listening on http://%s", addr)

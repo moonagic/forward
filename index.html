@@ -864,6 +864,11 @@
                     <span class="d-none d-lg-inline">Allow Current IP</span>
                     <span class="d-lg-none">Current IP</span>
                 </button>
+                <button id="view-duplicate-requests" class="btn btn-outline-danger" disabled>
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <span class="d-none d-lg-inline">Duplicate Requests</span>
+                    <span class="d-lg-none">Duplicates</span>
+                </button>
                 <button id="save-config" class="btn btn-success">
                     <i class="bi bi-check-circle-fill me-2"></i>
                     <span>Save and Apply</span>
@@ -1062,6 +1067,7 @@
             const saveConfigBtn = document.getElementById('save-config');
             const allowMyIpBtn = document.getElementById('allow-my-ip');
             const allowCurrentIpBtn = document.getElementById('allow-current-ip');
+            const viewDuplicateRequestsBtn = document.getElementById('view-duplicate-requests');
             const refreshIpPoolBtn = document.getElementById('refresh-ip-pool');
             const themeSwitcherBtn = document.getElementById('theme-switcher');
             const logoutBtn = document.getElementById('logout-btn');
@@ -1182,6 +1188,44 @@
                     }
                 } catch (error) {
                     console.error('Error fetching IP:', error);
+                }
+            };
+
+            // --- Duplicate Requests Check ---
+            const checkDuplicateRequests = async () => {
+                try {
+                    const response = await fetch('/api/duplicate-requests');
+                    if (!response.ok) return;
+                    const data = await response.json();
+
+                    if (data.count > 0) {
+                        // Enable button and update its appearance
+                        viewDuplicateRequestsBtn.disabled = false;
+                        viewDuplicateRequestsBtn.classList.remove('btn-outline-danger');
+                        viewDuplicateRequestsBtn.classList.add('btn-danger');
+                        // Add count badge to button
+                        const existingBadge = viewDuplicateRequestsBtn.querySelector('.badge');
+                        if (!existingBadge) {
+                            const countBadge = document.createElement('span');
+                            countBadge.className = 'badge bg-light text-dark rounded-pill ms-2';
+                            countBadge.textContent = data.count;
+                            viewDuplicateRequestsBtn.appendChild(countBadge);
+                        } else {
+                            existingBadge.textContent = data.count;
+                        }
+                    } else {
+                        // Keep button disabled and in outline style
+                        viewDuplicateRequestsBtn.disabled = true;
+                        viewDuplicateRequestsBtn.classList.remove('btn-danger');
+                        viewDuplicateRequestsBtn.classList.add('btn-outline-danger');
+                        // Remove count badge if exists
+                        const existingBadge = viewDuplicateRequestsBtn.querySelector('.badge');
+                        if (existingBadge) {
+                            existingBadge.remove();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking duplicate requests:', error);
                 }
             };
 
@@ -1492,6 +1536,10 @@
                 loadIPPool();
             });
 
+            viewDuplicateRequestsBtn.addEventListener('click', () => {
+                window.location.href = '/duplicates';
+            });
+
             // Logout functionality
             logoutBtn.addEventListener('click', async () => {
                 if (!confirm('Are you sure you want to logout?')) {
@@ -1554,6 +1602,7 @@
             loadConfig();
             fetchAndDisplayIP();
             loadIPPool();
+            checkDuplicateRequests();
         });
     </script>
 </body>

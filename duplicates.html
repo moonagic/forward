@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f8f9fa">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Forward">
+    <link rel="icon" href="/shield-icon.svg" type="image/svg+xml">
+    <title>Duplicate Requests - Forward</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --bs-body-bg-rgb: 248, 249, 250;
+            --primary-rgb: 13, 110, 253;
+            --card-bg-rgb: 255, 255, 255;
+            --glassmorphism-bg: rgba(255, 255, 255, 0.1);
+            --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-bs-theme="dark"] {
+            --bs-body-bg-rgb: 10, 14, 24;
+            --primary-rgb: 110, 168, 253;
+            --card-bg-rgb: 23, 28, 42;
+            --glassmorphism-bg: rgba(0, 0, 0, 0.2);
+            --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            background: linear-gradient(135deg,
+                    rgb(var(--bs-body-bg-rgb)) 0%,
+                    rgba(var(--primary-rgb), 0.05) 100%);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding-top: 70px;
+        }
+
+        .navbar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            z-index: 1030 !important;
+            background: var(--glassmorphism-bg) !important;
+            backdrop-filter: blur(20px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.1) !important;
+        }
+
+        .card {
+            background: var(--glassmorphism-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
+            border-radius: 16px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-light);
+        }
+
+        .btn {
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .table {
+            background: rgba(var(--card-bg-rgb), 0.8);
+            border-radius: 12px;
+        }
+
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            background: rgba(var(--primary-rgb), 0.1);
+        }
+
+        .duplicate-item {
+            transition: all 0.3s ease;
+        }
+
+        .duplicate-item:hover {
+            background: rgba(var(--primary-rgb), 0.05);
+            transform: translateY(-2px);
+        }
+
+        .text-monospace {
+            font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 767.98px) {
+            body {
+                padding-top: 68px;
+            }
+
+            .navbar {
+                height: 68px !important;
+            }
+
+            .table-responsive {
+                border-radius: 12px;
+            }
+
+            .table th,
+            .table td {
+                font-size: 0.875rem;
+                padding: 0.5rem;
+            }
+
+            .text-monospace {
+                font-size: 0.8rem;
+                word-break: break-all;
+            }
+        }
+
+        [data-bs-theme="dark"] .table {
+            background: rgba(var(--card-bg-rgb), 0.8);
+            color: var(--bs-body-color);
+        }
+
+        [data-bs-theme="dark"] .table th {
+            background: rgba(var(--primary-rgb), 0.2);
+            color: var(--bs-body-color);
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="navbar navbar-expand-lg shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="/">
+                <i class="bi bi-hdd-network-fill text-primary"></i>
+                <span>Forward</span>
+            </a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    <span class="d-none d-md-inline">Back to Config</span>
+                    <span class="d-md-none">Back</span>
+                </a>
+                <button id="theme-switcher" class="btn border-0 rounded-pill p-2">
+                    <i class="bi bi-sun-fill"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-3">
+        <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom border-primary-subtle">
+            <h1 class="text-body-emphasis mb-0">
+                <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                Duplicate Requests
+            </h1>
+            <div class="d-flex gap-2">
+                <button id="refresh-duplicates" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Refresh
+                </button>
+                <button id="clear-all-duplicates" class="btn btn-outline-danger" style="display: none;">
+                    <i class="bi bi-trash3 me-1"></i>
+                    Clear All
+                </button>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-danger bg-opacity-10">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-shield-exclamation text-danger me-2"></i>
+                    Duplicate Request ID Attempts
+                    <span id="duplicate-count" class="badge bg-danger rounded-pill ms-2">0</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    These are requests that attempted to use the same x-request-id multiple times, which could indicate potential replay attacks or duplicate submissions.
+                </p>
+
+                <div id="duplicates-empty" class="text-center text-muted py-5" style="display: none;">
+                    <i class="bi bi-shield-check display-4 text-success d-block mb-3"></i>
+                    <h4 class="text-success">No Duplicate Requests</h4>
+                    <p>No duplicate request IDs have been detected. This is good!</p>
+                </div>
+
+                <div id="duplicates-container">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">
+                                        <i class="bi bi-tag me-1"></i>
+                                        Request ID
+                                    </th>
+                                    <th scope="col">
+                                        <i class="bi bi-pc-display-horizontal me-1"></i>
+                                        Client IP
+                                    </th>
+                                    <th scope="col">
+                                        <i class="bi bi-clock me-1"></i>
+                                        Attempted At
+                                    </th>
+                                    <th scope="col" class="text-center">
+                                        <i class="bi bi-gear-fill me-1"></i>
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="duplicates-table-body">
+                                <!-- Duplicate requests will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="liveToast" class="toast border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto"><i class="bi bi-bell-fill"></i> Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body"></div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check authentication status
+            try {
+                const response = await fetch('/api/config');
+                if (!response.ok) {
+                    window.location.href = '/login';
+                    return;
+                }
+            } catch (error) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const refreshDuplicatesBtn = document.getElementById('refresh-duplicates');
+            const clearAllDuplicatesBtn = document.getElementById('clear-all-duplicates');
+            const themeSwitcherBtn = document.getElementById('theme-switcher');
+            const htmlEl = document.documentElement;
+            const toastEl = document.getElementById('liveToast');
+            const toastBody = toastEl.querySelector('.toast-body');
+            const bsToast = new bootstrap.Toast(toastEl);
+
+            // Theme Management
+            const getStoredTheme = () => localStorage.getItem('theme');
+            const setStoredTheme = theme => localStorage.setItem('theme', theme);
+
+            const applyTheme = (theme) => {
+                htmlEl.setAttribute('data-bs-theme', theme);
+                themeSwitcherBtn.innerHTML = theme === 'dark' ?
+                    '<i class="bi bi-moon-stars-fill"></i>' :
+                    '<i class="bi bi-sun-fill"></i>';
+
+                // Update theme-color meta tag
+                let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+                if (!themeColorMeta) {
+                    themeColorMeta = document.createElement('meta');
+                    themeColorMeta.name = 'theme-color';
+                    document.head.appendChild(themeColorMeta);
+                }
+                themeColorMeta.content = theme === 'dark' ? '#0a0e18' : '#f8f9fa';
+            };
+
+            const preferredTheme = getStoredTheme() || 'light';
+            applyTheme(preferredTheme);
+
+            themeSwitcherBtn.addEventListener('click', () => {
+                const currentTheme = htmlEl.getAttribute('data-bs-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                setStoredTheme(newTheme);
+                applyTheme(newTheme);
+            });
+
+            const showToast = (message, isError = false) => {
+                toastBody.textContent = message;
+                toastEl.classList.remove('bg-success-subtle', 'text-success-emphasis', 'bg-danger-subtle', 'text-danger-emphasis');
+                toastEl.classList.add(isError ? 'bg-danger-subtle' : 'bg-success-subtle', isError ? 'text-danger-emphasis' : 'text-success-emphasis');
+                bsToast.show();
+            };
+
+            const formatDateTime = (dateTimeStr) => {
+                const date = new Date(dateTimeStr);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                let timeAgo;
+                if (diffDays > 0) {
+                    timeAgo = `${diffDays}d ago`;
+                } else if (diffHours > 0) {
+                    timeAgo = `${diffHours}h ago`;
+                } else if (diffMins > 0) {
+                    timeAgo = `${diffMins}m ago`;
+                } else {
+                    timeAgo = 'Just now';
+                }
+
+                return {
+                    formatted: date.toLocaleString(),
+                    relative: timeAgo
+                };
+            };
+
+            const loadDuplicateRequests = async () => {
+                try {
+                    refreshDuplicatesBtn.disabled = true;
+                    refreshDuplicatesBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
+
+                    const response = await fetch('/api/duplicate-requests');
+                    if (!response.ok) {
+                        throw new Error('Failed to load duplicate requests');
+                    }
+
+                    const data = await response.json();
+                    const duplicateCount = document.getElementById('duplicate-count');
+                    const duplicatesEmpty = document.getElementById('duplicates-empty');
+                    const duplicatesContainer = document.getElementById('duplicates-container');
+                    const tableBody = document.getElementById('duplicates-table-body');
+
+                    duplicateCount.textContent = data.count;
+
+                    if (data.duplicates && data.duplicates.length > 0) {
+                        duplicatesEmpty.style.display = 'none';
+                        duplicatesContainer.style.display = 'block';
+                        clearAllDuplicatesBtn.style.display = 'block';
+
+                        tableBody.innerHTML = data.duplicates.map(duplicate => {
+                            const dateTime = formatDateTime(duplicate.attempted_at);
+                            return `
+                                <tr class="duplicate-item" data-id="${duplicate.id}">
+                                    <td>
+                                        <code class="text-monospace">${duplicate.request_id}</code>
+                                    </td>
+                                    <td>
+                                        <span class="text-monospace fw-bold">${duplicate.client_ip}</span>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <div class="fw-bold">${dateTime.formatted}</div>
+                                            <small class="text-muted">${dateTime.relative}</small>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-outline-danger btn-sm delete-duplicate-btn"
+                                                data-id="${duplicate.id}"
+                                                data-request-id="${duplicate.request_id}"
+                                                data-ip="${duplicate.client_ip}"
+                                                title="Delete this duplicate request record">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('');
+                    } else {
+                        duplicatesEmpty.style.display = 'block';
+                        duplicatesContainer.style.display = 'none';
+                        clearAllDuplicatesBtn.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error loading duplicate requests:', error);
+                    showToast(error.message, true);
+                } finally {
+                    refreshDuplicatesBtn.disabled = false;
+                    refreshDuplicatesBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refresh';
+                }
+            };
+
+            const deleteDuplicateRequest = async (id, requestId, clientIp) => {
+                if (!confirm(`Are you sure you want to delete this duplicate request record?\n\nRequest ID: ${requestId}\nClient IP: ${clientIp}`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/delete-duplicate-request', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ id: parseInt(id) })
+                    });
+
+                    const responseText = await response.text();
+                    if (!response.ok) {
+                        throw new Error(`Failed to delete duplicate request: ${responseText}`);
+                    }
+
+                    showToast('Duplicate request deleted successfully');
+
+                    // Remove the row from the table with animation
+                    const row = document.querySelector(`tr[data-id="${id}"]`);
+                    if (row) {
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(-20px)';
+                        setTimeout(() => {
+                            row.remove();
+                            // Update the count
+                            const countEl = document.getElementById('duplicate-count');
+                            const currentCount = parseInt(countEl.textContent) - 1;
+                            countEl.textContent = currentCount;
+
+                            // If no more duplicates, show empty state
+                            if (currentCount === 0) {
+                                document.getElementById('duplicates-empty').style.display = 'block';
+                                document.getElementById('duplicates-container').style.display = 'none';
+                                clearAllDuplicatesBtn.style.display = 'none';
+                            }
+                        }, 300);
+                    }
+                } catch (error) {
+                    console.error('Error deleting duplicate request:', error);
+                    showToast(error.message, true);
+                }
+            };
+
+            // Event delegation for delete buttons
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.delete-duplicate-btn')) {
+                    const btn = e.target.closest('.delete-duplicate-btn');
+                    const id = btn.dataset.id;
+                    const requestId = btn.dataset.requestId;
+                    const clientIp = btn.dataset.ip;
+
+                    deleteDuplicateRequest(id, requestId, clientIp);
+                }
+            });
+
+            const clearAllDuplicateRequests = async () => {
+                const currentCount = parseInt(document.getElementById('duplicate-count').textContent);
+                if (!confirm(`Are you sure you want to delete ALL ${currentCount} duplicate request records?\n\nThis action cannot be undone.`)) {
+                    return;
+                }
+
+                try {
+                    clearAllDuplicatesBtn.disabled = true;
+                    clearAllDuplicatesBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Clearing...';
+
+                    const response = await fetch('/api/clear-all-duplicates', {
+                        method: 'POST'
+                    });
+
+                    const responseText = await response.text();
+                    if (!response.ok) {
+                        throw new Error(`Failed to clear duplicate requests: ${responseText}`);
+                    }
+
+                    showToast(responseText);
+
+                    // Show empty state immediately
+                    document.getElementById('duplicates-empty').style.display = 'block';
+                    document.getElementById('duplicates-container').style.display = 'none';
+                    document.getElementById('duplicate-count').textContent = '0';
+                    clearAllDuplicatesBtn.style.display = 'none';
+                } catch (error) {
+                    console.error('Error clearing duplicate requests:', error);
+                    showToast(error.message, true);
+                } finally {
+                    clearAllDuplicatesBtn.disabled = false;
+                    clearAllDuplicatesBtn.innerHTML = '<i class="bi bi-trash3 me-1"></i>Clear All';
+                }
+            };
+
+            refreshDuplicatesBtn.addEventListener('click', loadDuplicateRequests);
+            clearAllDuplicatesBtn.addEventListener('click', clearAllDuplicateRequests);
+
+            // Load data on page load
+            loadDuplicateRequests();
+        });
+    </script>
+</body>
+
+</html>
