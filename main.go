@@ -617,11 +617,20 @@ func requireAuth(handler http.HandlerFunc, username, password string) http.Handl
 			}
 		}
 
-		// For API endpoints, return 401 with WWW-Authenticate header
+		// Check if this is a browser request (has Accept header with text/html)
+		acceptHeader := r.Header.Get("Accept")
+		isBrowserRequest := strings.Contains(acceptHeader, "text/html")
+
+		// For API endpoints from browsers (like fetch requests), don't send WWW-Authenticate
+		// to avoid basic auth popup. Only send WWW-Authenticate for non-browser clients.
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			log.Printf("API endpoint, sending WWW-Authenticate header")
-			w.Header().Set("WWW-Authenticate", `Basic realm="API Access"`)
-			http.Error(w, "Unauthorized. Use Basic Auth or session cookie.", http.StatusUnauthorized)
+			if !isBrowserRequest && !strings.Contains(acceptHeader, "application/json") {
+				log.Printf("API endpoint from non-browser client, sending WWW-Authenticate header")
+				w.Header().Set("WWW-Authenticate", `Basic realm="API Access"`)
+			} else {
+				log.Printf("API endpoint from browser, not sending WWW-Authenticate header")
+			}
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
