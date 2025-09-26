@@ -590,28 +590,43 @@ func requireAuth(handler http.HandlerFunc, username, password string) http.Handl
 			return
 		}
 
+		// Debug logging
+		log.Printf("Auth check for path: %s", r.URL.Path)
+
 		// Check for session cookie first
 		cookie, err := r.Cookie("session_id")
-		if err == nil && validateSession(cookie.Value) {
-			handler(w, r)
-			return
+		if err == nil {
+			log.Printf("Session cookie found: %s", cookie.Value)
+			if validateSession(cookie.Value) {
+				log.Printf("Session valid, allowing access")
+				handler(w, r)
+				return
+			}
+			log.Printf("Session invalid")
+		} else {
+			log.Printf("No session cookie found: %v", err)
 		}
 
 		// Check for Basic Auth (for API clients)
 		user, pass, ok := r.BasicAuth()
-		if ok && user == username && pass == password {
-			handler(w, r)
-			return
+		if ok {
+			log.Printf("Basic auth found: user=%s", user)
+			if user == username && pass == password {
+				handler(w, r)
+				return
+			}
 		}
 
 		// For API endpoints, return 401 with WWW-Authenticate header
 		if strings.HasPrefix(r.URL.Path, "/api/") {
+			log.Printf("API endpoint, sending WWW-Authenticate header")
 			w.Header().Set("WWW-Authenticate", `Basic realm="API Access"`)
 			http.Error(w, "Unauthorized. Use Basic Auth or session cookie.", http.StatusUnauthorized)
 			return
 		}
 
 		// For web pages, redirect to login page
+		log.Printf("Web page, redirecting to login")
 		http.Redirect(w, r, "/login", http.StatusFound)
 	}
 }
@@ -965,6 +980,11 @@ func startAdminServer(addr string, auth BasicAuth) {
 		w.Write(indexHTML)
 	}, auth.Username, auth.Password)
 
+	duplicatesHandlerWithAuth := requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(duplicatesHTML)
+	}, auth.Username, auth.Password)
+
 	ipHandler := func(w http.ResponseWriter, r *http.Request) {
 		ipStr := getClientIP(r)
 		w.Header().Set("Content-Type", "application/json")
@@ -1090,10 +1110,7 @@ func startAdminServer(addr string, auth BasicAuth) {
 		w.Write(shieldIconSVG)
 	})
 
-	http.HandleFunc("/duplicates", requireAuth(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(duplicatesHTML)
-	}, auth.Username, auth.Password))
+	http.HandleFunc("/duplicates", duplicatesHandlerWithAuth)
 	http.HandleFunc("/", rootHandlerWithAuth)
 
 	log.Printf("Starting web admin interface, listening on http://%s", addr)
