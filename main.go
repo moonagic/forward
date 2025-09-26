@@ -135,6 +135,19 @@ func initDatabase() error {
 		return fmt.Errorf("failed to create table: %w", err)
 	}
 
+	// Create duplicate_requests table if it doesn't exist
+	createDuplicateTableQuery := `
+	CREATE TABLE IF NOT EXISTS duplicate_requests (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		request_id TEXT NOT NULL,
+		client_ip TEXT NOT NULL,
+		attempted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`
+
+	if _, err := db.Exec(createDuplicateTableQuery); err != nil {
+		return fmt.Errorf("failed to create duplicate_requests table: %w", err)
+	}
+
 	log.Printf("Database initialized: %s", dbPath)
 	return nil
 }
@@ -152,6 +165,12 @@ func isRequestIDExists(requestID string) (bool, error) {
 func saveRequestID(requestID string) error {
 	query := "INSERT INTO request_ids (request_id) VALUES (?)"
 	_, err := db.Exec(query, requestID)
+	return err
+}
+
+func logDuplicateRequest(requestID, clientIP string) error {
+	query := "INSERT INTO duplicate_requests (request_id, client_ip) VALUES (?, ?)"
+	_, err := db.Exec(query, requestID, clientIP)
 	return err
 }
 
@@ -612,6 +631,14 @@ func allowHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get client IP directly from request first (needed for both logging and processing)
+	ipStr := getClientIP(r)
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		http.Error(w, "Could not parse client IP address: "+ipStr, http.StatusBadRequest)
+		return
+	}
+
 	// Check for x-request-id header
 	requestID := r.Header.Get("x-request-id")
 	if requestID != "" {
@@ -624,9 +651,15 @@ func allowHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if exists {
-			// Request ID already exists, reject the request
-			log.Printf("Request ID %s already exists, rejecting request", requestID)
-			// http.Error(w, "Request ID already processed", http.StatusConflict)
+			// Request ID already exists, log the duplicate attempt with IP
+			if err := logDuplicateRequest(requestID, ipStr); err != nil {
+				log.Printf("Database error logging duplicate request ID %s from IP %s: %v", requestID, ipStr, err)
+			} else {
+				log.Printf("Logged duplicate request ID %s from IP %s", requestID, ipStr)
+			}
+
+			// Reject the request - do not add IP to temporary pool
+			log.Printf("Request ID %s already exists, rejecting request from IP %s", requestID, ipStr)
 			w.Write([]byte("Old IP Reseted"))
 			return
 		}
@@ -637,15 +670,7 @@ func allowHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Saved new request ID %s to database", requestID)
-	}
-
-	// Get client IP directly from request
-	ipStr := getClientIP(r)
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		http.Error(w, "Could not parse client IP address: "+ipStr, http.StatusBadRequest)
-		return
+		log.Printf("Saved new request ID %s from IP %s to database", requestID, ipStr)
 	}
 
 	// Add to temporary IP pool
