@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,6 +45,7 @@ var shieldIconSVG []byte
 const udpTimeout = 5 * time.Minute
 const configPath = "config.yml"
 const ipPoolPath = "ip_pool.json"
+const dbPath = "requests.db"
 
 // --- Data Structures ---
 
@@ -52,10 +55,10 @@ type BasicAuth struct {
 }
 
 type Config struct {
-	AdminAddr        string    `yaml:"admin_addr" json:"admin_addr"`
-	BasicAuth        BasicAuth `yaml:"basic_auth" json:"basic_auth"`
-	Forwards         []Forward `yaml:"forwards" json:"forwards"`
-	TempIPPoolSize   int       `yaml:"temp_ip_pool_size" json:"temp_ip_pool_size"`
+	AdminAddr      string    `yaml:"admin_addr" json:"admin_addr"`
+	BasicAuth      BasicAuth `yaml:"basic_auth" json:"basic_auth"`
+	Forwards       []Forward `yaml:"forwards" json:"forwards"`
+	TempIPPoolSize int       `yaml:"temp_ip_pool_size" json:"temp_ip_pool_size"`
 }
 
 type Forward struct {
@@ -74,10 +77,10 @@ type TempIPEntry struct {
 // TempIPPool manages a pool of temporarily allowed IPs with FIFO eviction
 type TempIPPool struct {
 	mu       sync.RWMutex
-	ips      []TempIPEntry        // FIFO queue of IPs with metadata
-	ipMap    map[string]*TempIPEntry  // Fast lookup with pointer to entry
+	ips      []TempIPEntry           // FIFO queue of IPs with metadata
+	ipMap    map[string]*TempIPEntry // Fast lookup with pointer to entry
 	maxSize  int
-	filePath string              // Path to persistent storage file
+	filePath string // Path to persistent storage file
 }
 
 type IPPoolData struct {
@@ -103,12 +106,61 @@ type Session struct {
 var (
 	sessions    = make(map[string]*Session)
 	sessionsMux = sync.RWMutex{}
+	db          *sql.DB
 )
 
 // --- Global Manager ---
 
 var manager = NewForwarderManager()
 var tempIPPool *TempIPPool
+
+// --- Database Functions ---
+
+func initDatabase() error {
+	var err error
+	db, err = sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Create request_ids table if it doesn't exist
+	createTableQuery := `
+	CREATE TABLE IF NOT EXISTS request_ids (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		request_id TEXT NOT NULL UNIQUE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`
+
+	if _, err := db.Exec(createTableQuery); err != nil {
+		return fmt.Errorf("failed to create table: %w", err)
+	}
+
+	log.Printf("Database initialized: %s", dbPath)
+	return nil
+}
+
+func isRequestIDExists(requestID string) (bool, error) {
+	query := "SELECT COUNT(*) FROM request_ids WHERE request_id = ?"
+	var count int
+	err := db.QueryRow(query, requestID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func saveRequestID(requestID string) error {
+	query := "INSERT INTO request_ids (request_id) VALUES (?)"
+	_, err := db.Exec(query, requestID)
+	return err
+}
+
+func closeDatabase() {
+	if db != nil {
+		db.Close()
+		log.Println("Database connection closed")
+	}
+}
 
 // --- Temporary IP Pool ---
 
@@ -560,6 +612,34 @@ func allowHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for x-request-id header
+	requestID := r.Header.Get("x-request-id")
+	if requestID != "" {
+		// Check if this request ID already exists in the database
+		exists, err := isRequestIDExists(requestID)
+		if err != nil {
+			log.Printf("Database error checking request ID %s: %v", requestID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		if exists {
+			// Request ID already exists, reject the request
+			log.Printf("Request ID %s already exists, rejecting request", requestID)
+			// http.Error(w, "Request ID already processed", http.StatusConflict)
+			w.Write([]byte("Old IP Reseted"))
+			return
+		}
+
+		// Save the new request ID to the database
+		if err := saveRequestID(requestID); err != nil {
+			log.Printf("Database error saving request ID %s: %v", requestID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("Saved new request ID %s to database", requestID)
+	}
+
 	// Get client IP directly from request
 	ipStr := getClientIP(r)
 	ip := net.ParseIP(ipStr)
@@ -807,8 +887,8 @@ func startAdminServer(addr string, auth BasicAuth) {
 		ips := tempIPPool.GetAll()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"ips": ips,
-			"maxSize": tempIPPool.maxSize,
+			"ips":         ips,
+			"maxSize":     tempIPPool.maxSize,
 			"currentSize": len(ips),
 		})
 	}
@@ -867,6 +947,11 @@ func main() {
 		log.Fatalf("Failed to parse config.yml: %v", err)
 	}
 
+	// Initialize database
+	if err := initDatabase(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+
 	// Set default temp IP pool size if not configured
 	if config.TempIPPoolSize <= 0 {
 		config.TempIPPoolSize = 10
@@ -897,6 +982,9 @@ func main() {
 	// Wait for shutdown signal
 	<-sigChan
 	log.Println("Shutdown signal received, performing graceful shutdown...")
+
+	// Close database connection
+	closeDatabase()
 
 	// Save IP pool before exit
 	tempIPPool.Shutdown()
