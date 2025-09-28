@@ -244,17 +244,8 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
-            // Check authentication status
-            try {
-                const response = await fetch('/api/config');
-                if (!response.ok) {
-                    window.location.href = '/login';
-                    return;
-                }
-            } catch (error) {
-                window.location.href = '/login';
-                return;
-            }
+            // If we reached this page, server-side auth already passed
+            // No need for additional client-side auth checks
 
             const refreshDuplicatesBtn = document.getElementById('refresh-duplicates');
             const clearAllDuplicatesBtn = document.getElementById('clear-all-duplicates');
@@ -331,8 +322,17 @@
                     refreshDuplicatesBtn.disabled = true;
                     refreshDuplicatesBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
 
-                    const response = await fetch('/api/duplicate-requests');
+                    const response = await fetch('/api/duplicate-requests', {
+                        credentials: 'include',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
                     if (!response.ok) {
+                        if (response.status === 401) {
+                            window.location.href = '/login';
+                            return;
+                        }
                         throw new Error('Failed to load duplicate requests');
                     }
 
@@ -399,14 +399,20 @@
                 try {
                     const response = await fetch('/api/delete-duplicate-request', {
                         method: 'POST',
+                        credentials: 'include',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
                         },
                         body: JSON.stringify({ id: parseInt(id) })
                     });
 
-                    const responseText = await response.text();
                     if (!response.ok) {
+                        if (response.status === 401) {
+                            window.location.href = '/login';
+                            return;
+                        }
+                        const responseText = await response.text();
                         throw new Error(`Failed to delete duplicate request: ${responseText}`);
                     }
 
@@ -461,13 +467,23 @@
                     clearAllDuplicatesBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Clearing...';
 
                     const response = await fetch('/api/clear-all-duplicates', {
-                        method: 'POST'
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
                     });
 
-                    const responseText = await response.text();
                     if (!response.ok) {
+                        if (response.status === 401) {
+                            window.location.href = '/login';
+                            return;
+                        }
+                        const responseText = await response.text();
                         throw new Error(`Failed to clear duplicate requests: ${responseText}`);
                     }
+
+                    const responseText = await response.text();
 
                     showToast(responseText);
 
