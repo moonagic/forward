@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	_ "embed"
 	"encoding/hex"
@@ -533,11 +532,6 @@ func generateSessionID() string {
 	return hex.EncodeToString(b)
 }
 
-func hashPassword(password string) string {
-	h := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(h[:])
-}
-
 func createSession() string {
 	sessionID := generateSessionID()
 	if sessionID == "" {
@@ -651,7 +645,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getConfig(w http.ResponseWriter, r *http.Request) {
+func getConfig(w http.ResponseWriter, _ *http.Request) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
@@ -1082,7 +1076,6 @@ func startAdminServer(addr string, auth BasicAuth) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("Successfully cleared %d duplicate request records", rowsDeleted)))
 	}
-
 
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		loginHandler(w, r, auth)
