@@ -691,6 +691,14 @@ func postConfig(w http.ResponseWriter, r *http.Request) {
 
 // getClientIP extracts the client's IP address from the request, prioritizing proxy headers.
 func getClientIP(r *http.Request) string {
+	// Check allow-ip header first for explicitly allowed IP targets
+	if allowIP := strings.TrimSpace(r.Header.Get("allow-ip")); allowIP != "" {
+		if ip := net.ParseIP(allowIP); ip != nil {
+			return allowIP
+		}
+		// If allow-ip header exists but cannot be parsed as IP, continue with original logic
+	}
+
 	// Check X-Real-IP header first, which is often set by reverse proxies.
 	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
 		return realIP
