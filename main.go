@@ -45,6 +45,12 @@ var shieldIconSVG []byte
 var duplicatesHTML []byte
 
 const udpTimeout = 5 * time.Minute
+const udpMaxSessions = 1000 // 最大UDP会话数，防止内存泄露
+const udpCleanupInterval = 1 * time.Minute // UDP会话清理间隔
+const sessionCleanupInterval = 30 * time.Minute // HTTP会话清理间隔
+const sessionMaxAge = 24 * time.Hour // HTTP会话最大存活时间
+const dbCleanupInterval = 24 * time.Hour // 数据库清理间隔
+const dbDataRetentionDays = 30 // 数据库数据保留天数
 const configPath = "config.yml"
 const ipPoolPath = "ip_pool.json"
 const dbPath = "requests.db"
@@ -105,6 +111,20 @@ type Session struct {
 	LastSeen  time.Time
 }
 
+// UDP Session management for memory leak prevention
+type udpSession struct {
+	conn       *net.UDPConn
+	lastActive time.Time
+	cancel     context.CancelFunc
+}
+
+type UDPSessionManager struct {
+	mu          sync.RWMutex
+	sessions    map[string]*udpSession
+	maxSessions int
+	timeout     time.Duration
+}
+
 var (
 	sessions    = make(map[string]*Session)
 	sessionsMux = sync.RWMutex{}
@@ -123,6 +143,17 @@ func initDatabase() error {
 	db, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Configure connection pool to prevent memory leaks
+	db.SetMaxOpenConns(25)                  // Maximum 25 open connections
+	db.SetMaxIdleConns(5)                   // Keep at most 5 idle connections
+	db.SetConnMaxLifetime(5 * time.Minute)  // Connections expire after 5 minutes
+	db.SetConnMaxIdleTime(1 * time.Minute)  // Idle connections expire after 1 minute
+
+	// Test database connection
+	if err := db.Ping(); err != nil {
+		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	// Create request_ids table if it doesn't exist
@@ -150,7 +181,7 @@ func initDatabase() error {
 		return fmt.Errorf("failed to create duplicate_requests table: %w", err)
 	}
 
-	log.Printf("Database initialized: %s", dbPath)
+	log.Printf("Database initialized: %s (pool: max_open=25, max_idle=5)", dbPath)
 	return nil
 }
 
@@ -239,6 +270,70 @@ func clearAllDuplicateRequests() (int64, error) {
 	}
 
 	return rowsAffected, nil
+}
+
+// cleanupOldDatabaseRecords removes records older than retention period
+func cleanupOldDatabaseRecords() (int, error) {
+	cutoffDate := time.Now().AddDate(0, 0, -dbDataRetentionDays)
+	totalCleaned := 0
+
+	// Clean old request_ids
+	query1 := "DELETE FROM request_ids WHERE created_at < ?"
+	result1, err := db.Exec(query1, cutoffDate)
+	if err != nil {
+		return 0, fmt.Errorf("failed to clean request_ids: %w", err)
+	}
+	rows1, _ := result1.RowsAffected()
+	totalCleaned += int(rows1)
+
+	// Clean old duplicate_requests
+	query2 := "DELETE FROM duplicate_requests WHERE attempted_at < ?"
+	result2, err := db.Exec(query2, cutoffDate)
+	if err != nil {
+		return totalCleaned, fmt.Errorf("failed to clean duplicate_requests: %w", err)
+	}
+	rows2, _ := result2.RowsAffected()
+	totalCleaned += int(rows2)
+
+	// Run VACUUM to reclaim disk space
+	if totalCleaned > 0 {
+		if _, err := db.Exec("VACUUM"); err != nil {
+			log.Printf("Warning: Failed to VACUUM database: %v", err)
+		}
+	}
+
+	if totalCleaned > 0 {
+		log.Printf("DB: Cleaned up %d old records (retention: %d days)", totalCleaned, dbDataRetentionDays)
+	}
+
+	return totalCleaned, nil
+}
+
+// startDatabaseCleanup starts a background goroutine to clean up old database records
+func startDatabaseCleanup(ctx context.Context) {
+	go func() {
+		// Run cleanup immediately on startup
+		if _, err := cleanupOldDatabaseRecords(); err != nil {
+			log.Printf("DB: Initial cleanup failed: %v", err)
+		}
+
+		ticker := time.NewTicker(dbCleanupInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Stopping database cleanup goroutine")
+				return
+			case <-ticker.C:
+				if _, err := cleanupOldDatabaseRecords(); err != nil {
+					log.Printf("DB: Cleanup failed: %v", err)
+				}
+			}
+		}
+	}()
+
+	log.Printf("Database cleanup started, interval: %v, retention: %d days", dbCleanupInterval, dbDataRetentionDays)
 }
 
 func closeDatabase() {
@@ -449,6 +544,147 @@ func (pool *TempIPPool) Shutdown() {
 	}
 }
 
+// --- UDP Session Manager ---
+
+func NewUDPSessionManager(maxSessions int, timeout time.Duration) *UDPSessionManager {
+	return &UDPSessionManager{
+		sessions:    make(map[string]*udpSession),
+		maxSessions: maxSessions,
+		timeout:     timeout,
+	}
+}
+
+// Get retrieves or creates a UDP session
+func (m *UDPSessionManager) Get(clientAddr string) (*udpSession, bool) {
+	m.mu.RLock()
+	session, exists := m.sessions[clientAddr]
+	m.mu.RUnlock()
+
+	if exists {
+		// Update last active time
+		m.mu.Lock()
+		session.lastActive = time.Now()
+		m.mu.Unlock()
+	}
+
+	return session, exists
+}
+
+// Add creates a new UDP session with connection limit enforcement
+func (m *UDPSessionManager) Add(clientAddr string, conn *net.UDPConn, cancel context.CancelFunc) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if we've reached the limit
+	if len(m.sessions) >= m.maxSessions {
+		// Find and remove the oldest inactive session (LRU eviction)
+		var oldestKey string
+		var oldestTime time.Time
+		first := true
+
+		for key, session := range m.sessions {
+			if first || session.lastActive.Before(oldestTime) {
+				oldestKey = key
+				oldestTime = session.lastActive
+				first = false
+			}
+		}
+
+		if oldestKey != "" {
+			// Close the oldest session
+			if oldSession := m.sessions[oldestKey]; oldSession != nil {
+				if oldSession.cancel != nil {
+					oldSession.cancel()
+				}
+				if oldSession.conn != nil {
+					oldSession.conn.Close()
+				}
+			}
+			delete(m.sessions, oldestKey)
+			log.Printf("UDP: Evicted oldest session %s (LRU), total sessions: %d", oldestKey, len(m.sessions))
+		}
+	}
+
+	// Add the new session
+	m.sessions[clientAddr] = &udpSession{
+		conn:       conn,
+		lastActive: time.Now(),
+		cancel:     cancel,
+	}
+
+	log.Printf("UDP: Added new session %s, total sessions: %d/%d", clientAddr, len(m.sessions), m.maxSessions)
+	return nil
+}
+
+// Remove deletes a session
+func (m *UDPSessionManager) Remove(clientAddr string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if session := m.sessions[clientAddr]; session != nil {
+		if session.cancel != nil {
+			session.cancel()
+		}
+		if session.conn != nil {
+			session.conn.Close()
+		}
+	}
+	delete(m.sessions, clientAddr)
+}
+
+// CleanupExpired removes sessions that have been inactive for longer than timeout
+func (m *UDPSessionManager) CleanupExpired() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	cleaned := 0
+
+	for key, session := range m.sessions {
+		if now.Sub(session.lastActive) > m.timeout {
+			if session.cancel != nil {
+				session.cancel()
+			}
+			if session.conn != nil {
+				session.conn.Close()
+			}
+			delete(m.sessions, key)
+			cleaned++
+		}
+	}
+
+	if cleaned > 0 {
+		log.Printf("UDP: Cleaned up %d expired sessions, remaining: %d/%d", cleaned, len(m.sessions), m.maxSessions)
+	}
+
+	return cleaned
+}
+
+// Shutdown closes all sessions
+func (m *UDPSessionManager) Shutdown() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for key, session := range m.sessions {
+		if session.cancel != nil {
+			session.cancel()
+		}
+		if session.conn != nil {
+			session.conn.Close()
+		}
+		delete(m.sessions, key)
+	}
+
+	log.Printf("UDP: Shutdown complete, all sessions closed")
+}
+
+// GetStats returns current session statistics
+func (m *UDPSessionManager) GetStats() (current int, max int) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.sessions), m.maxSessions
+}
+
 // --- Forwarder Manager ---
 
 type runningForwarder struct {
@@ -565,7 +801,7 @@ func validateSession(sessionID string) bool {
 	}
 
 	// Check if session is expired (24 hours)
-	if time.Since(session.CreatedAt) > 24*time.Hour {
+	if time.Since(session.CreatedAt) > sessionMaxAge {
 		delete(sessions, sessionID)
 		return false
 	}
@@ -573,6 +809,48 @@ func validateSession(sessionID string) bool {
 	// Update last seen time
 	session.LastSeen = time.Now()
 	return true
+}
+
+// cleanupExpiredSessions removes all expired sessions (called periodically)
+func cleanupExpiredSessions() int {
+	sessionsMux.Lock()
+	defer sessionsMux.Unlock()
+
+	now := time.Now()
+	cleaned := 0
+
+	for sessionID, session := range sessions {
+		if now.Sub(session.CreatedAt) > sessionMaxAge {
+			delete(sessions, sessionID)
+			cleaned++
+		}
+	}
+
+	if cleaned > 0 {
+		log.Printf("HTTP: Cleaned up %d expired sessions, remaining: %d", cleaned, len(sessions))
+	}
+
+	return cleaned
+}
+
+// startSessionCleanup starts a background goroutine to clean up expired sessions
+func startSessionCleanup(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(sessionCleanupInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Stopping session cleanup goroutine")
+				return
+			case <-ticker.C:
+				cleanupExpiredSessions()
+			}
+		}
+	}()
+
+	log.Printf("Session cleanup started, interval: %v, max age: %v", sessionCleanupInterval, sessionMaxAge)
 }
 
 // Dual authentication: supports both session and basic auth
@@ -1167,6 +1445,16 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	// Create context for cleanup goroutines
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start session cleanup to prevent memory leaks
+	startSessionCleanup(ctx)
+
+	// Start database cleanup to prevent unlimited growth
+	startDatabaseCleanup(ctx)
+
 	go startAdminServer(config.AdminAddr, config.BasicAuth)
 
 	manager.mu.Lock()
@@ -1178,6 +1466,9 @@ func main() {
 	// Wait for shutdown signal
 	<-sigChan
 	log.Println("Shutdown signal received, performing graceful shutdown...")
+
+	// Cancel context to stop cleanup goroutines
+	cancel()
 
 	// Close database connection
 	closeDatabase()
@@ -1288,20 +1579,44 @@ func handleTCP(ctx context.Context, from, to string, allowedNets []*net.IPNet) {
 
 func forwardTCP(ctx context.Context, conn net.Conn, to string) {
 	defer conn.Close()
+
 	target, err := net.Dial("tcp", to)
 	if err != nil {
 		return
 	}
 	defer target.Close()
 
+	// Create a child context for this connection
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
+
+	// Channel to signal when either copy finishes
+	done := make(chan struct{}, 2)
+
+	// Monitor context cancellation
 	go func() {
-		<-ctx.Done()
+		<-connCtx.Done()
 		conn.Close()
 		target.Close()
 	}()
 
-	go io.Copy(target, conn)
-	io.Copy(conn, target)
+	// Copy from client to target
+	go func() {
+		io.Copy(target, conn)
+		connCancel() // Cancel context when one direction finishes
+		done <- struct{}{}
+	}()
+
+	// Copy from target to client
+	go func() {
+		io.Copy(conn, target)
+		connCancel() // Cancel context when one direction finishes
+		done <- struct{}{}
+	}()
+
+	// Wait for both directions to finish
+	<-done
+	<-done
 }
 
 func handleUDP(ctx context.Context, from, to string, allowedNets []*net.IPNet) {
@@ -1323,20 +1638,41 @@ func handleUDP(ctx context.Context, from, to string, allowedNets []*net.IPNet) {
 		return
 	}
 
+	// Create session manager with limits
+	sessionManager := NewUDPSessionManager(udpMaxSessions, udpTimeout)
+
+	// Start cleanup goroutine to prevent memory leaks
+	cleanupCtx, cleanupCancel := context.WithCancel(ctx)
+	defer cleanupCancel()
+
+	go func() {
+		ticker := time.NewTicker(udpCleanupInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-cleanupCtx.Done():
+				return
+			case <-ticker.C:
+				sessionManager.CleanupExpired()
+			}
+		}
+	}()
+
+	// Shutdown on context cancel
 	go func() {
 		<-ctx.Done()
 		listener.Close()
+		sessionManager.Shutdown()
+		log.Printf("Stopping UDP listener on %s", from)
 	}()
 
-	sessions := make(map[string]*net.UDPConn)
-	var mu sync.Mutex
 	buf := make([]byte, 65535)
 
 	for {
 		n, clientAddr, err := listener.ReadFromUDP(buf)
 		if err != nil {
 			if ctx.Err() != nil {
-				log.Printf("Stopping UDP listener on %s", from)
 				return
 			}
 			continue
@@ -1346,30 +1682,39 @@ func handleUDP(ctx context.Context, from, to string, allowedNets []*net.IPNet) {
 			continue
 		}
 
-		mu.Lock()
-		targetConn, ok := sessions[clientAddr.String()]
-		mu.Unlock()
+		clientKey := clientAddr.String()
 
-		if !ok {
-			targetConn, err = net.DialUDP("udp", nil, toAddr)
+		// Check if session exists
+		session, exists := sessionManager.Get(clientKey)
+
+		if !exists {
+			// Create new UDP connection
+			targetConn, err := net.DialUDP("udp", nil, toAddr)
 			if err != nil {
+				log.Printf("Failed to dial UDP target %s: %v", to, err)
 				continue
 			}
 
-			mu.Lock()
-			sessions[clientAddr.String()] = targetConn
-			mu.Unlock()
+			// Create context for this session
+			sessionCtx, sessionCancel := context.WithCancel(ctx)
 
-			go func(ctx context.Context, clientAddr *net.UDPAddr, targetConn *net.UDPConn) {
+			// Add to session manager (with LRU eviction if needed)
+			if err := sessionManager.Add(clientKey, targetConn, sessionCancel); err != nil {
+				log.Printf("Failed to add UDP session: %v", err)
+				targetConn.Close()
+				sessionCancel()
+				continue
+			}
+
+			// Start goroutine to handle responses from target
+			go func(sessionCtx context.Context, clientAddr *net.UDPAddr, targetConn *net.UDPConn, clientKey string) {
 				defer func() {
-					targetConn.Close()
-					mu.Lock()
-					delete(sessions, clientAddr.String())
-					mu.Unlock()
+					sessionManager.Remove(clientKey)
 				}()
 
+				// Monitor context cancellation
 				go func() {
-					<-ctx.Done()
+					<-sessionCtx.Done()
 					targetConn.Close()
 				}()
 
@@ -1380,14 +1725,25 @@ func handleUDP(ctx context.Context, from, to string, allowedNets []*net.IPNet) {
 					if err != nil {
 						return
 					}
+
+					// Update session activity
+					if sess, ok := sessionManager.Get(clientKey); ok {
+						sess.lastActive = time.Now()
+					}
+
 					_, err = listener.WriteToUDP(buf[:n], clientAddr)
 					if err != nil {
 						return
 					}
 				}
-			}(ctx, clientAddr, targetConn)
+			}(sessionCtx, clientAddr, targetConn, clientKey)
+
+			session, _ = sessionManager.Get(clientKey)
 		}
 
-		targetConn.Write(buf[:n])
+		// Send data to target
+		if session != nil && session.conn != nil {
+			session.conn.Write(buf[:n])
+		}
 	}
 }
