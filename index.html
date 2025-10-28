@@ -1115,6 +1115,8 @@
             const bsToast = new bootstrap.Toast(toastEl);
 
             let currentConfig = {};
+            let currentClientIP = '';
+            let tempIPPool = [];
 
             // --- IP Pool Management ---
             const loadIPPool = async () => {
@@ -1122,6 +1124,9 @@
                     const response = await fetch('/api/ip-pool');
                     if (!response.ok) return;
                     const data = await response.json();
+
+                    // Store IP pool data globally
+                    tempIPPool = data.ips || [];
 
                     const poolContainer = document.getElementById('ip-pool-container');
                     const poolCount = document.getElementById('ip-pool-count');
@@ -1210,6 +1215,9 @@
                     }
                 } catch (error) {
                     console.error('Error loading IP pool:', error);
+                } finally {
+                    // Update button state after loading IP pool
+                    updateAllowCurrentIpButton();
                 }
             };
 
@@ -1219,6 +1227,10 @@
                     const response = await fetch('/api/ip');
                     if (!response.ok) return;
                     const data = await response.json();
+
+                    // Store current client IP globally
+                    currentClientIP = data.ip || '';
+
                     const ipEl = document.getElementById('client-ip');
                     if (data.ip) {
                         // Show different format on mobile vs desktop
@@ -1230,6 +1242,29 @@
                     }
                 } catch (error) {
                     console.error('Error fetching IP:', error);
+                } finally {
+                    // Update button state after fetching current IP
+                    updateAllowCurrentIpButton();
+                }
+            };
+
+            // --- Update Allow Current IP Button State ---
+            const updateAllowCurrentIpButton = () => {
+                // Check if current IP exists in temporary IP pool
+                if (!currentClientIP || tempIPPool.length === 0) {
+                    return;
+                }
+
+                const ipExistsInPool = tempIPPool.some(ipEntry => ipEntry.ip === currentClientIP);
+
+                if (ipExistsInPool) {
+                    // Disable button if IP already exists in pool
+                    allowCurrentIpBtn.disabled = true;
+                    allowCurrentIpBtn.title = 'Your IP is already in the temporary whitelist';
+                } else {
+                    // Enable button if IP is not in pool
+                    allowCurrentIpBtn.disabled = false;
+                    allowCurrentIpBtn.title = '';
                 }
             };
 
