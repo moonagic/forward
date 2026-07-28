@@ -506,6 +506,17 @@
                 <span>Forward</span>
             </a>
             <div class="d-flex align-items-center gap-2">
+                <!-- Cluster Node Selector -->
+                <div class="dropdown" id="node-selector-container">
+                    <button class="btn btn-outline-primary btn-sm rounded-pill px-3 dropdown-toggle d-flex align-items-center gap-1.5" type="button" id="nodeSelectDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-hdd-rack-fill text-primary" id="node-icon"></i>
+                        <span id="selected-node-name">Master Node</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm" id="node-select-menu" aria-labelledby="nodeSelectDropdown">
+                        <li><h6 class="dropdown-header">Select Cluster Node</h6></li>
+                        <div id="node-list-items"></div>
+                    </ul>
+                </div>
                 <span id="client-ip" class="navbar-text text-muted fs-sm"></span>
                 <button id="logout-btn" class="btn btn-outline-danger btn-sm rounded-pill px-3">
                     <i class="bi bi-box-arrow-right me-1"></i>
@@ -842,6 +853,46 @@
             let currentConfig = { forwards: [] };
             let currentClientIP = '';
             let tempIPPool = [];
+            let selectedNodeID = 'master';
+
+            const loadNodes = async () => {
+                try {
+                    const response = await fetch('/api/nodes');
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    const nodeListItems = document.getElementById('node-list-items');
+                    if (!nodeListItems || !data.nodes) return;
+
+                    nodeListItems.innerHTML = data.nodes.map(node => {
+                        const isSelected = (node.node_id === selectedNodeID);
+                        const isOnline = (node.status === 'online');
+                        const badgeClass = isOnline ? 'bg-success' : 'bg-secondary';
+                        const iconClass = (node.node_id === 'master' || node.mode === 'master') ? 'bi-hdd-rack-fill' : 'bi-diagram-3';
+                        const safeName = (node.node_name || node.node_id).replace(/'/g, "\\'");
+
+                        return `
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center justify-content-between gap-3 ${isSelected ? 'active' : ''}" href="#" onclick="selectNode('${node.node_id}', '${safeName}'); return false;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi ${iconClass}"></i>
+                                        <span>${node.node_name || node.node_id}</span>
+                                    </div>
+                                    <span class="badge ${badgeClass} rounded-pill fs-xs">${node.status}</span>
+                                </a>
+                            </li>
+                        `;
+                    }).join('');
+                } catch (error) {
+                    console.error('Failed to load cluster nodes:', error);
+                }
+            };
+
+            window.selectNode = (nodeID, nodeName) => {
+                selectedNodeID = nodeID;
+                document.getElementById('selected-node-name').textContent = nodeName;
+                loadNodes();
+                loadConfig();
+            };
 
             const showToast = (message, isError = false) => {
                 toastBody.textContent = message;
@@ -1132,7 +1183,8 @@
 
             const loadConfig = async () => {
                 try {
-                    const response = await fetch('/api/config');
+                    const url = (selectedNodeID && selectedNodeID !== 'master') ? `/api/config?node_id=${encodeURIComponent(selectedNodeID)}` : '/api/config';
+                    const response = await fetch(url);
                     if (!response.ok) throw new Error('Failed to load configuration.');
                     currentConfig = await response.json();
                     renderRules();
@@ -1150,7 +1202,8 @@
                         forwards: currentConfig.forwards || []
                     };
 
-                    const response = await fetch('/api/config', {
+                    const url = (selectedNodeID && selectedNodeID !== 'master') ? `/api/config?node_id=${encodeURIComponent(selectedNodeID)}` : '/api/config';
+                    const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(newConfig)
@@ -1158,7 +1211,7 @@
                     const responseText = await response.text();
                     if (!response.ok) throw new Error(`Failed to save: ${responseText}`);
 
-                    showToast('Configuration saved and applied successfully!');
+                    showToast(responseText || 'Configuration saved successfully!');
                     await loadConfig();
                 } catch (error) {
                     showToast(error.message, true);
@@ -1427,6 +1480,8 @@
             });
 
             // Initial loads
+            loadNodes();
+            setInterval(loadNodes, 10000);
             loadConfig();
             fetchAndDisplayIP();
             loadIPPool();

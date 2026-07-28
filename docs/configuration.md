@@ -11,6 +11,22 @@ The application loads `config.yml` from the working directory at startup.
 ### 1.1 Complete Configuration Example (`config.example.yml`)
 
 ```yaml
+# Node Role: "master" or "edge" (default: "master")
+mode: master
+
+# Optional Node ID & Name
+node_id: master-node
+node_name: "Master Node (Local)"
+
+# Shared Secret Token for Master-Edge communication (Optional)
+node_token: "secret_token_here"
+
+# Edge Node Configuration (Required only when mode is "edge"):
+# Supports both HTTP and HTTPS (e.g. "https://master.example.com:9090")
+# master_url: "https://192.168.1.100:9090"
+# Set to true if using self-signed HTTPS certificate on Master
+# tls_skip_verify: false
+
 # Admin Web UI and REST API listening address.
 admin_addr: "127.0.0.1:9090"
 
@@ -39,10 +55,23 @@ forwards:
     allowed_ips: []
 ```
 
-### 1.2 Field Specification
+### 1.2 Master/Edge Distributed Roles
+
+| Mode (`mode`) | Description | Supported Interfaces & Behaviors |
+| :--- | :--- | :--- |
+| `master` | Primary management node (default) | Serves Web UI (`index.html`), manages rules for Master and all connected Edge nodes, collects and syncs IP pools globally. |
+| `edge` | Distributed forwarding node | Web UI is disabled (redirects to Master). Performs zero-latency local IP whitelist verification and periodically syncs with Master via heartbeat. |
+
+### 1.3 Field Specification
 
 | Field Name | Type | Required | Default | Description |
 | :--- | :--- | :---: | :--- | :--- |
+| `mode` | string | No | `"master"` | Role of the node: `"master"` or `"edge"`. |
+| `node_id` | string | No | `"master"` / `"edge-node"` | Unique identifier for the node in the cluster. |
+| `node_name` | string | No | `NodeID` | Human-readable display name for the node in Master Web UI. |
+| `node_token` | string | No | `""` | Shared secret token for Master-Edge authentication. |
+| `master_url` | string | Yes (Edge) | None | Master API base URL (HTTP or HTTPS, e.g. `"https://master.example.com:9090"`). Required when `mode` is `"edge"`. |
+| `tls_skip_verify` | bool | No | `false` | Set to `true` to skip SSL certificate verification if Master uses a self-signed TLS certificate. |
 | `admin_addr` | string | Yes | None | Web UI and REST API host/port (e.g., `"0.0.0.0:9090"`). If omitted, admin server will not start. |
 | `basic_auth.username` | string | No | `""` | Admin username. If blank, authentication is disabled. |
 | `basic_auth.password` | string | No | `""` | Admin password. If blank, authentication is disabled. |

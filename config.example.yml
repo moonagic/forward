@@ -1,3 +1,19 @@
+# Node Role: "master" or "edge" (default: "master")
+mode: master
+
+# Optional Node ID & Name
+node_id: master-node
+node_name: "Master Node (Local)"
+
+# Shared Secret Token for Master-Edge communication (Optional)
+node_token: "secret_token_here"
+
+# Edge Node Configuration (Required only when mode is "edge"):
+# Supports both HTTP and HTTPS (e.g. "https://master.example.com:9090")
+# master_url: "https://192.168.1.100:9090"
+# Set to true if using self-signed HTTPS certificate on Master
+# tls_skip_verify: false
+
 admin_addr: 127.0.0.1:9090
 basic_auth:
   username: admin
@@ -19,3 +35,4 @@ forwards:
     allowed_ips:
       - 192.168.1.0/24
       - 127.0.0.0/24
+

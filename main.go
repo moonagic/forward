@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"database/sql"
 	_ "embed"
 	"encoding/hex"
@@ -63,6 +64,12 @@ type BasicAuth struct {
 }
 
 type Config struct {
+	Mode           string    `yaml:"mode" json:"mode"`                     // "master" or "edge" (default: "master")
+	NodeID         string    `yaml:"node_id" json:"node_id"`               // Unique ID for edge node
+	NodeName       string    `yaml:"node_name" json:"node_name"`           // Display name for edge node
+	MasterURL      string    `yaml:"master_url" json:"master_url"`         // Edge only: Master base URL
+	NodeToken      string    `yaml:"node_token" json:"node_token"`         // Auth token between Master and Edge
+	TLSSkipVerify  bool      `yaml:"tls_skip_verify" json:"tls_skip_verify"` // Skip TLS verification for self-signed HTTPS
 	AdminAddr      string    `yaml:"admin_addr" json:"admin_addr"`
 	BasicAuth      BasicAuth `yaml:"basic_auth" json:"basic_auth"`
 	Forwards       []Forward `yaml:"forwards" json:"forwards"`
@@ -126,15 +133,15 @@ type UDPSessionManager struct {
 }
 
 var (
-	sessions    = make(map[string]*Session)
-	sessionsMux = sync.RWMutex{}
-	db          *sql.DB
+	sessions         = make(map[string]*Session)
+	sessionsMux      = sync.RWMutex{}
+	db               *sql.DB
+	manager          = NewForwarderManager()
+	tempIPPool       *TempIPPool
+	nodeRegistry     = NewNodeRegistry()
+	currentConfig    Config
+	currentConfigMux sync.RWMutex
 )
-
-// --- Global Manager ---
-
-var manager = NewForwarderManager()
-var tempIPPool *TempIPPool
 
 // --- Database Functions ---
 
@@ -272,7 +279,6 @@ func clearAllDuplicateRequests() (int64, error) {
 	return rowsAffected, nil
 }
 
-// cleanupOldDatabaseRecords removes records older than retention period
 func cleanupOldDatabaseRecords() (int, error) {
 	cutoffDate := time.Now().AddDate(0, 0, -dbDataRetentionDays)
 	totalCleaned := 0
@@ -309,7 +315,6 @@ func cleanupOldDatabaseRecords() (int, error) {
 	return totalCleaned, nil
 }
 
-// startDatabaseCleanup starts a background goroutine to clean up old database records
 func startDatabaseCleanup(ctx context.Context) {
 	go func() {
 		// Run cleanup immediately on startup
@@ -341,6 +346,302 @@ func closeDatabase() {
 		db.Close()
 		log.Println("Database connection closed")
 	}
+}
+
+// Master-Edge Distributed Clustering Data Structures
+
+type RegisteredNode struct {
+	NodeID        string        `json:"node_id"`
+	NodeName      string        `json:"node_name"`
+	RemoteAddr    string        `json:"remote_addr"`
+	LastSeen      time.Time     `json:"last_seen"`
+	Status        string        `json:"status"` // "online" or "offline"
+	Forwards      []Forward     `json:"forwards"`
+	DesiredConfig *Config       `json:"-"` // Pending config update queued by Master UI
+}
+
+type NodeRegistry struct {
+	mu    sync.RWMutex
+	nodes map[string]*RegisteredNode
+}
+
+func NewNodeRegistry() *NodeRegistry {
+	return &NodeRegistry{
+		nodes: make(map[string]*RegisteredNode),
+	}
+}
+
+func (r *NodeRegistry) RegisterOrUpdate(nodeID, nodeName, remoteAddr string, forwards []Forward) (*RegisteredNode, *Config) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	node, exists := r.nodes[nodeID]
+	if !exists {
+		node = &RegisteredNode{
+			NodeID:   nodeID,
+			NodeName: nodeName,
+		}
+		r.nodes[nodeID] = node
+	}
+
+	node.NodeName = nodeName
+	node.RemoteAddr = remoteAddr
+	node.LastSeen = time.Now()
+	node.Status = "online"
+	node.Forwards = forwards
+
+	var desired *Config
+	if node.DesiredConfig != nil {
+		desired = node.DesiredConfig
+		node.DesiredConfig = nil // Clear after serving once
+	}
+
+	return node, desired
+}
+
+func (r *NodeRegistry) GetAll() []RegisteredNode {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	now := time.Now()
+	result := make([]RegisteredNode, 0, len(r.nodes))
+	for _, node := range r.nodes {
+		n := *node
+		// Mark offline if no heartbeat for > 30s
+		if now.Sub(n.LastSeen) > 30*time.Second {
+			n.Status = "offline"
+		}
+		result = append(result, n)
+	}
+	return result
+}
+
+func (r *NodeRegistry) SetDesiredConfig(nodeID string, newConfig Config) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	node, exists := r.nodes[nodeID]
+	if !exists {
+		return false
+	}
+	node.DesiredConfig = &newConfig
+	return true
+}
+
+func (r *NodeRegistry) GetNode(nodeID string) (*RegisteredNode, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	node, exists := r.nodes[nodeID]
+	if !exists {
+		return nil, false
+	}
+	n := *node
+	if time.Since(n.LastSeen) > 30*time.Second {
+		n.Status = "offline"
+	}
+	return &n, true
+}
+
+type HeartbeatRequest struct {
+	NodeID    string        `json:"node_id"`
+	NodeName  string        `json:"node_name"`
+	NodeToken string        `json:"node_token"`
+	Forwards  []Forward     `json:"forwards"`
+	NewIPs    []TempIPEntry `json:"new_ips"`
+}
+
+type HeartbeatResponse struct {
+	Status        string        `json:"status"`
+	MasterIPPool  []TempIPEntry `json:"master_ip_pool"`
+	DesiredConfig *Config       `json:"desired_config,omitempty"`
+}
+
+type PendingIPBuffer struct {
+	mu  sync.Mutex
+	ips []TempIPEntry
+}
+
+var pendingSyncIPs = &PendingIPBuffer{}
+
+func (b *PendingIPBuffer) Add(ip string, triggered time.Time) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.ips = append(b.ips, TempIPEntry{IP: ip, LastTriggered: triggered})
+}
+
+func (b *PendingIPBuffer) Drain() []TempIPEntry {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.ips) == 0 {
+		return nil
+	}
+	drained := b.ips
+	b.ips = nil
+	return drained
+}
+
+func internalHeartbeatHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req HeartbeatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Validate node token if configured on Master
+	currentConfigMux.RLock()
+	masterToken := currentConfig.NodeToken
+	currentConfigMux.RUnlock()
+
+	if masterToken != "" && req.NodeToken != masterToken {
+		http.Error(w, "Unauthorized node token", http.StatusUnauthorized)
+		return
+	}
+
+	clientIP := getClientIP(r)
+
+	// Merge any new IPs sent by Edge into Master's TempIPPool
+	for _, entry := range req.NewIPs {
+		if entry.IP != "" {
+			tempIPPool.Add(entry.IP)
+		}
+	}
+
+	// Update node status in registry and check for desired config
+	_, desiredConfig := nodeRegistry.RegisterOrUpdate(req.NodeID, req.NodeName, clientIP, req.Forwards)
+
+	resp := HeartbeatResponse{
+		Status:        "ok",
+		MasterIPPool:  tempIPPool.GetAll(),
+		DesiredConfig: desiredConfig,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func startEdgeHeartbeatWorker(ctx context.Context, config Config) {
+	if config.Mode != "edge" || config.MasterURL == "" {
+		return
+	}
+
+	log.Printf("Starting Edge heartbeat worker connecting to Master at %s (Node ID: %s)", config.MasterURL, config.NodeID)
+
+	ticker := time.NewTicker(5 * time.Second)
+	go func() {
+		defer ticker.Stop()
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: config.TLSSkipVerify,
+			},
+		}
+		client := &http.Client{
+			Timeout:   5 * time.Second,
+			Transport: transport,
+		}
+
+		doHeartbeat := func() {
+			currentConfigMux.RLock()
+			curForwards := currentConfig.Forwards
+			curToken := currentConfig.NodeToken
+			curNodeID := currentConfig.NodeID
+			curNodeName := currentConfig.NodeName
+			masterURL := currentConfig.MasterURL
+			currentConfigMux.RUnlock()
+
+			if curNodeID == "" {
+				curNodeID = "edge-node"
+			}
+
+			newIPs := pendingSyncIPs.Drain()
+
+			reqPayload := HeartbeatRequest{
+				NodeID:    curNodeID,
+				NodeName:  curNodeName,
+				NodeToken: curToken,
+				Forwards:  curForwards,
+				NewIPs:    newIPs,
+			}
+
+			bodyBytes, err := json.Marshal(reqPayload)
+			if err != nil {
+				log.Printf("Edge Heartbeat: Failed to marshal request: %v", err)
+				return
+			}
+
+			endpoint := strings.TrimRight(masterURL, "/") + "/api/internal/heartbeat"
+			req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(string(bodyBytes)))
+			if err != nil {
+				log.Printf("Edge Heartbeat: Failed to create request: %v", err)
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("Edge Heartbeat: Connection to master %s failed: %v", endpoint, err)
+				for _, ipEntry := range newIPs {
+					pendingSyncIPs.Add(ipEntry.IP, ipEntry.LastTriggered)
+				}
+				return
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Edge Heartbeat: Master returned HTTP status %d", resp.StatusCode)
+				resp.Body.Close()
+				return
+			}
+
+			var hbResp HeartbeatResponse
+			if err := json.NewDecoder(resp.Body).Decode(&hbResp); err != nil {
+				log.Printf("Edge Heartbeat: Failed to decode response: %v", err)
+				resp.Body.Close()
+				return
+			}
+			resp.Body.Close()
+
+			for _, entry := range hbResp.MasterIPPool {
+				if entry.IP != "" {
+					tempIPPool.Add(entry.IP)
+				}
+			}
+
+			if hbResp.DesiredConfig != nil {
+				log.Printf("Edge Heartbeat: Received updated configuration from Master! Applying...")
+				currentConfigMux.Lock()
+				newConfig := currentConfig
+				newConfig.Forwards = hbResp.DesiredConfig.Forwards
+				if hbResp.DesiredConfig.TempIPPoolSize > 0 {
+					newConfig.TempIPPoolSize = hbResp.DesiredConfig.TempIPPoolSize
+				}
+				if err := reloadConfigAndForwarders(newConfig); err != nil {
+					log.Printf("Edge Heartbeat: Failed to reload updated config: %v", err)
+				} else {
+					currentConfig = newConfig
+					log.Printf("Edge Heartbeat: Configuration updated successfully from Master.")
+				}
+				currentConfigMux.Unlock()
+			}
+		}
+
+		// Perform initial heartbeat immediately on startup
+		doHeartbeat()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Stopping Edge heartbeat worker")
+				return
+			case <-ticker.C:
+				doHeartbeat()
+			}
+		}
+	}()
 }
 
 // --- Temporary IP Pool ---
@@ -923,7 +1224,35 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getConfig(w http.ResponseWriter, _ *http.Request) {
+func getConfig(w http.ResponseWriter, r *http.Request) {
+	nodeID := r.URL.Query().Get("node_id")
+
+	currentConfigMux.RLock()
+	masterNodeID := currentConfig.NodeID
+	if masterNodeID == "" {
+		masterNodeID = "master"
+	}
+	currentConfigMux.RUnlock()
+
+	if nodeID != "" && nodeID != masterNodeID && nodeID != "master" {
+		node, exists := nodeRegistry.GetNode(nodeID)
+		if !exists {
+			http.Error(w, fmt.Sprintf("Edge node '%s' not found", nodeID), http.StatusNotFound)
+			return
+		}
+
+		respConfig := Config{
+			NodeID:   node.NodeID,
+			NodeName: node.NodeName,
+			Mode:     "edge",
+			Forwards: node.Forwards,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(respConfig)
+		return
+	}
+
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
@@ -934,19 +1263,25 @@ func getConfig(w http.ResponseWriter, _ *http.Request) {
 		tempIPPoolSize = tempIPPool.maxSize
 	}
 
-	yamlFile, err := os.ReadFile(configPath)
-	if err == nil {
-		var fileConfig Config
-		if yaml.Unmarshal(yamlFile, &fileConfig) == nil {
-			adminAddr = fileConfig.AdminAddr
-			basicAuth = fileConfig.BasicAuth
-			if fileConfig.TempIPPoolSize > 0 {
-				tempIPPoolSize = fileConfig.TempIPPoolSize
-			}
-		}
+	currentConfigMux.RLock()
+	adminAddr = currentConfig.AdminAddr
+	basicAuth = currentConfig.BasicAuth
+	if currentConfig.TempIPPoolSize > 0 {
+		tempIPPoolSize = currentConfig.TempIPPoolSize
 	}
+	nodeIDVal := currentConfig.NodeID
+	nodeNameVal := currentConfig.NodeName
+	nodeModeVal := currentConfig.Mode
+	masterURLVal := currentConfig.MasterURL
+	nodeTokenVal := currentConfig.NodeToken
+	currentConfigMux.RUnlock()
 
 	config := Config{
+		NodeID:         nodeIDVal,
+		NodeName:       nodeNameVal,
+		Mode:           nodeModeVal,
+		MasterURL:      masterURLVal,
+		NodeToken:      nodeTokenVal,
 		AdminAddr:      adminAddr,
 		BasicAuth:      basicAuth,
 		TempIPPoolSize: tempIPPoolSize,
@@ -958,9 +1293,28 @@ func getConfig(w http.ResponseWriter, _ *http.Request) {
 }
 
 func postConfig(w http.ResponseWriter, r *http.Request) {
+	nodeID := r.URL.Query().Get("node_id")
+
 	var newConfig Config
 	if err := json.NewDecoder(r.Body).Decode(&newConfig); err != nil {
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	currentConfigMux.RLock()
+	masterNodeID := currentConfig.NodeID
+	if masterNodeID == "" {
+		masterNodeID = "master"
+	}
+	currentConfigMux.RUnlock()
+
+	if nodeID != "" && nodeID != masterNodeID && nodeID != "master" {
+		if ok := nodeRegistry.SetDesiredConfig(nodeID, newConfig); !ok {
+			http.Error(w, fmt.Sprintf("Edge node '%s' not found", nodeID), http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("Config queued for edge node '%s'. It will apply on next heartbeat.", nodeID)))
 		return
 	}
 
@@ -971,6 +1325,10 @@ func postConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	currentConfigMux.Lock()
+	currentConfig = newConfig
+	currentConfigMux.Unlock()
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Config saved and reloaded successfully."))
@@ -1057,6 +1415,15 @@ func allowHandler(w http.ResponseWriter, r *http.Request) {
 	// Add to temporary IP pool
 	isNewIP := tempIPPool.Add(ipStr)
 
+	currentConfigMux.RLock()
+	isEdge := currentConfig.Mode == "edge"
+	currentConfigMux.RUnlock()
+
+	if isEdge {
+		pendingSyncIPs.Add(ipStr, time.Now())
+		log.Printf("Queued client IP %s on Edge for sync to Master", ipStr)
+	}
+
 	if isNewIP {
 		log.Printf("Added new client IP %s to temporary IP pool", ipStr)
 		w.WriteHeader(http.StatusOK)
@@ -1066,6 +1433,60 @@ func allowHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Old IP Reseted"))
 	}
+}
+
+func nodesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	nodes := nodeRegistry.GetAll()
+
+	currentConfigMux.RLock()
+	masterNodeID := currentConfig.NodeID
+	if masterNodeID == "" {
+		masterNodeID = "master"
+	}
+	masterNodeName := currentConfig.NodeName
+	if masterNodeName == "" {
+		masterNodeName = "Master Node (Local)"
+	}
+	masterNode := RegisteredNode{
+		NodeID:     masterNodeID,
+		NodeName:   masterNodeName,
+		RemoteAddr: "127.0.0.1",
+		LastSeen:   time.Now(),
+		Status:     "online",
+		Forwards:   manager.currentForwards,
+	}
+	currentConfigMux.RUnlock()
+
+	allNodes := append([]RegisteredNode{masterNode}, nodes...)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"nodes": allNodes,
+	})
+}
+
+func isWebUIDisabledOnEdge(w http.ResponseWriter, r *http.Request) bool {
+	currentConfigMux.RLock()
+	isEdge := currentConfig.Mode == "edge"
+	masterURL := currentConfig.MasterURL
+	currentConfigMux.RUnlock()
+
+	if isEdge {
+		if masterURL != "" {
+			http.Redirect(w, r, masterURL, http.StatusFound)
+		} else {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte("<h3>Web management interface is disabled on Edge nodes. Please access via Master node.</h3>"))
+		}
+		return true
+	}
+	return false
 }
 
 func allowMyIPHandler(w http.ResponseWriter, r *http.Request) {
@@ -1203,6 +1624,9 @@ func reloadConfigAndForwarders(newConfig Config) error {
 
 func loginHandler(w http.ResponseWriter, r *http.Request, auth BasicAuth) {
 	if r.Method == http.MethodGet {
+		if isWebUIDisabledOnEdge(w, r) {
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(loginHTML)
 		return
@@ -1286,11 +1710,17 @@ func startAdminServer(addr string, auth BasicAuth) {
 	removeTempIPHandlerWithAuth := requireAuth(removeTempIPHandler, auth.Username, auth.Password)
 	allowMyIPHandlerWithAuth := requireAuth(allowMyIPHandler, auth.Username, auth.Password)
 	rootHandlerWithAuth := requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if isWebUIDisabledOnEdge(w, r) {
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(indexHTML)
 	}, auth.Username, auth.Password)
 
 	duplicatesHandlerWithAuth := requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		if isWebUIDisabledOnEdge(w, r) {
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(duplicatesHTML)
 	}, auth.Username, auth.Password)
@@ -1392,6 +1822,8 @@ func startAdminServer(addr string, auth BasicAuth) {
 	})
 	http.HandleFunc("/api/logout", logoutHandler)
 	http.HandleFunc("/api/config", configHandlerWithAuth)
+	http.HandleFunc("/api/internal/heartbeat", internalHeartbeatHandler)
+	http.HandleFunc("/api/nodes", requireAuth(nodesHandler, auth.Username, auth.Password))
 	http.HandleFunc("/api/allow", allowHandlerWithAuth)
 	http.HandleFunc("/api/remove-temp-ip", removeTempIPHandlerWithAuth)
 	http.HandleFunc("/api/allow-my-ip", allowMyIPHandlerWithAuth)
@@ -1442,6 +1874,28 @@ func main() {
 		log.Fatalf("Failed to parse config.yml: %v", err)
 	}
 
+	if config.Mode == "" {
+		config.Mode = "master"
+	}
+	if config.NodeID == "" {
+		if config.Mode == "master" {
+			config.NodeID = "master"
+		} else {
+			config.NodeID = "edge-node"
+		}
+	}
+	if config.NodeName == "" {
+		if config.Mode == "master" {
+			config.NodeName = "Master Node (Local)"
+		} else {
+			config.NodeName = config.NodeID
+		}
+	}
+
+	currentConfigMux.Lock()
+	currentConfig = config
+	currentConfigMux.Unlock()
+
 	// Initialize database
 	if err := initDatabase(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
@@ -1475,6 +1929,11 @@ func main() {
 
 	// Start database cleanup to prevent unlimited growth
 	startDatabaseCleanup(ctx)
+
+	// Start Edge heartbeat worker if in edge mode
+	if config.Mode == "edge" {
+		startEdgeHeartbeatWorker(ctx, config)
+	}
 
 	go startAdminServer(config.AdminAddr, config.BasicAuth)
 
