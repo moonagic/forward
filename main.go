@@ -929,19 +929,28 @@ func getConfig(w http.ResponseWriter, _ *http.Request) {
 
 	var adminAddr string
 	var basicAuth BasicAuth
+	tempIPPoolSize := 10
+	if tempIPPool != nil && tempIPPool.maxSize > 0 {
+		tempIPPoolSize = tempIPPool.maxSize
+	}
+
 	yamlFile, err := os.ReadFile(configPath)
 	if err == nil {
 		var fileConfig Config
 		if yaml.Unmarshal(yamlFile, &fileConfig) == nil {
 			adminAddr = fileConfig.AdminAddr
 			basicAuth = fileConfig.BasicAuth
+			if fileConfig.TempIPPoolSize > 0 {
+				tempIPPoolSize = fileConfig.TempIPPoolSize
+			}
 		}
 	}
 
 	config := Config{
-		AdminAddr: adminAddr,
-		BasicAuth: basicAuth,
-		Forwards:  manager.currentForwards,
+		AdminAddr:      adminAddr,
+		BasicAuth:      basicAuth,
+		TempIPPoolSize: tempIPPoolSize,
+		Forwards:       manager.currentForwards,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1147,6 +1156,18 @@ func removeTempIPHandler(w http.ResponseWriter, r *http.Request) {
 // The manager's mutex must be held by the caller.
 func reloadConfigAndForwarders(newConfig Config) error {
 	oldForwards := manager.currentForwards
+
+	if newConfig.TempIPPoolSize <= 0 {
+		if tempIPPool != nil && tempIPPool.maxSize > 0 {
+			newConfig.TempIPPoolSize = tempIPPool.maxSize
+		} else {
+			newConfig.TempIPPoolSize = 10
+		}
+	} else if tempIPPool != nil {
+		tempIPPool.mu.Lock()
+		tempIPPool.maxSize = newConfig.TempIPPoolSize
+		tempIPPool.mu.Unlock()
+	}
 
 	log.Println("Received config update, stopping current services to check ports...")
 	manager.StopAll()

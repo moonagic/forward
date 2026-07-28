@@ -32,26 +32,21 @@
                 }
             }
 
-            // Priority: stored theme > system preference > light
             const storedTheme = getStoredTheme();
             const systemTheme = getSystemTheme();
             const theme = storedTheme || systemTheme;
 
             document.documentElement.setAttribute('data-bs-theme', theme);
 
-            // Set theme-color meta tag immediately
             const meta = document.createElement('meta');
             meta.name = 'theme-color';
             meta.content = theme === 'dark' ? '#0a0e18' : '#f8f9fa';
             document.head.appendChild(meta);
 
-            // Store system theme if no stored preference
             if (!storedTheme) {
                 try {
                     localStorage.setItem('theme', theme);
-                } catch (e) {
-                    // Ignore localStorage errors
-                }
+                } catch (e) {}
             }
         })();
     </script>
@@ -59,21 +54,25 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
     <style>
         :root {
             --bs-body-bg-rgb: 248, 249, 250;
             --primary-rgb: 13, 110, 253;
             --card-bg-rgb: 255, 255, 255;
-            --glassmorphism-bg: rgba(255, 255, 255, 0.1);
-            --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.1);
+            --glassmorphism-bg: rgba(255, 255, 255, 0.7);
+            --shadow-light: 0 10px 30px rgba(0, 0, 0, 0.05);
+            --shadow-hover: 0 15px 35px rgba(13, 110, 253, 0.12);
         }
 
         [data-bs-theme="dark"] {
             --bs-body-bg-rgb: 10, 14, 24;
             --primary-rgb: 110, 168, 253;
             --card-bg-rgb: 23, 28, 42;
-            --glassmorphism-bg: rgba(0, 0, 0, 0.2);
-            --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --glassmorphism-bg: rgba(23, 28, 42, 0.75);
+            --shadow-light: 0 10px 30px rgba(0, 0, 0, 0.3);
+            --shadow-hover: 0 15px 35px rgba(0, 0, 0, 0.4);
         }
 
         * {
@@ -83,14 +82,13 @@
         body {
             background: linear-gradient(135deg,
                     rgb(var(--bs-body-bg-rgb)) 0%,
-                    rgba(var(--primary-rgb), 0.05) 100%);
+                    rgba(var(--primary-rgb), 0.04) 100%);
             min-height: 100vh;
-            transition: all 0.3s ease;
+            transition: background-color 0.3s ease;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            padding-top: 70px;
+            padding-top: 75px;
         }
 
-        /* 简单直接的固定导航栏 */
         .navbar {
             position: fixed !important;
             top: 0 !important;
@@ -104,74 +102,6 @@
             border-bottom: 1px solid rgba(var(--primary-rgb), 0.1) !important;
         }
 
-        /* Safari专用修复 - 极端强制固定 */
-        @supports (-webkit-touch-callout: none) {
-
-            /* 完全禁用Safari的所有滚动行为影响 */
-            html,
-            body {
-                -webkit-overflow-scrolling: auto !important;
-                overscroll-behavior: none !important;
-                -webkit-transform: translateZ(0) !important;
-                -webkit-perspective: 1000 !important;
-                -webkit-backface-visibility: hidden !important;
-            }
-
-            .navbar {
-                position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                transform: translateZ(0) !important;
-                -webkit-transform: translateZ(0) !important;
-                -webkit-perspective: 1000 !important;
-                -webkit-backface-visibility: hidden !important;
-                isolation: isolate !important;
-                will-change: auto !important;
-                contain: layout style paint !important;
-            }
-
-            /* 强制浏览器重新计算布局 */
-            .navbar::before {
-                content: "";
-                position: absolute;
-                top: -1px;
-                left: 0;
-                right: 0;
-                height: 1px;
-                background: transparent;
-                z-index: -1;
-            }
-        }
-
-        /* iOS Safari 安全区域处理 */
-        @supports (-webkit-touch-callout: none) {
-            @media not (display-mode: standalone) {
-                body {
-                    padding-top: calc(70px + env(safe-area-inset-top)) !important;
-                }
-
-                .navbar {
-                    padding-top: env(safe-area-inset-top) !important;
-                    height: calc(70px + env(safe-area-inset-top)) !important;
-                }
-            }
-        }
-
-        /* Ensure dark mode has deep enough background */
-        [data-bs-theme="dark"] .navbar {
-            background: rgba(10, 14, 24, 0.95);
-        }
-
-        [data-bs-theme="dark"] .navbar::before {
-            background: rgba(10, 14, 24, 0.95);
-        }
-
-        .navbar .container {
-            padding-left: max(1rem, env(safe-area-inset-left));
-            padding-right: max(1rem, env(safe-area-inset-right));
-        }
-
         .navbar-brand {
             font-weight: 700;
             display: flex;
@@ -179,690 +109,396 @@
             gap: 0.5rem;
         }
 
-        .card {
+        /* Glassmorphism Cards */
+        .glass-card {
             background: var(--glassmorphism-bg);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(var(--primary-rgb), 0.15);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(var(--primary-rgb), 0.12);
             border-radius: 16px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             box-shadow: var(--shadow-light);
-            overflow: hidden;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .card:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 20px 40px rgba(var(--primary-rgb), 0.2);
+        .rule-card {
+            position: relative;
+            overflow: hidden;
+            border-left-width: 4px !important;
+        }
+
+        .rule-card-tcp {
+            border-left-color: #0d6efd !important;
+        }
+
+        .rule-card-udp {
+            border-left-color: #0dcaf0 !important;
+        }
+
+        .rule-card-both {
+            border-left-color: #6f42c1 !important;
+        }
+
+        .rule-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
             border-color: rgba(var(--primary-rgb), 0.3);
         }
 
+        /* Forwarding Pathway Visualizer */
+        .network-flow-box {
+            background: rgba(var(--primary-rgb), 0.025);
+            border: 1px solid rgba(var(--primary-rgb), 0.12);
+            border-radius: 12px;
+            padding: 0.85rem 1rem;
+            transition: background 0.2s ease;
+        }
+
+        [data-bs-theme="dark"] .network-flow-box {
+            background: rgba(255, 255, 255, 0.02);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .endpoint-icon {
+            width: 38px;
+            height: 38px;
+            flex-shrink: 0;
+        }
+
+        /* Buttons & Badges */
         .btn {
             border-radius: 12px;
-            transition: all 0.3s ease;
             font-weight: 500;
+            transition: all 0.2s ease;
         }
 
-        /* Mobile button override */
-        @media (max-width: 767.98px) {
-            .btn {
-                border-radius: 8px;
-            }
+        .btn-action {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
         }
 
-        .btn:hover {
-            transform: translateY(-2px);
+        .badge-protocol {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            padding: 0.3em 0.65em;
+            border-radius: 8px;
+            text-transform: uppercase;
         }
 
-        .btn-delete {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            width: 3rem;
-            height: 3rem;
+        /* Temp IP Pool item design */
+        .temp-ip-card {
+            background: rgba(var(--primary-rgb), 0.02);
+            border: 1px solid rgba(var(--primary-rgb), 0.08);
+            border-radius: 12px;
+            padding: 0.6rem 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .temp-ip-card:hover {
+            background: rgba(var(--primary-rgb), 0.05);
+            border-color: rgba(var(--primary-rgb), 0.2);
+        }
+
+        [data-bs-theme="dark"] .temp-ip-card {
+            background: rgba(255, 255, 255, 0.02);
+            border-color: rgba(255, 255, 255, 0.06);
+        }
+
+        /* Modal styling */
+        .modal-content {
+            background: var(--glassmorphism-bg);
+            backdrop-filter: blur(24px) saturate(200%);
+            -webkit-backdrop-filter: blur(24px) saturate(200%);
+            border: 1px solid rgba(var(--primary-rgb), 0.2);
+            border-radius: 20px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            background: rgba(var(--primary-rgb), 0.03);
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
+            padding: 1.25rem 1.5rem;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .modal-footer {
+            background: rgba(var(--primary-rgb), 0.02);
+            border-top: 1px solid rgba(var(--primary-rgb), 0.08);
+            padding: 1rem 1.5rem;
+        }
+
+        /* Protocol Selector Segmented Controls */
+        .proto-selector {
+            background: rgba(var(--primary-rgb), 0.04);
+            border: 1.5px solid rgba(var(--primary-rgb), 0.12);
+            border-radius: 14px;
+            padding: 0.35rem;
+            display: flex;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        [data-bs-theme="dark"] .proto-selector {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .proto-pill {
+            flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 50%;
-            z-index: 10;
-            flex-shrink: 0;
-            min-width: 3rem;
-            min-height: 3rem;
-            max-width: 3rem;
-            max-height: 3rem;
+            gap: 0.5rem;
+            padding: 0.65rem 1rem;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--bs-secondary-color);
+            background: transparent;
+            user-select: none;
+            border: 1px solid transparent;
         }
 
+        .proto-pill:hover {
+            background: rgba(var(--primary-rgb), 0.05);
+        }
+
+        .btn-check:checked + .proto-pill .icon-unchecked {
+            display: none !important;
+        }
+
+        .btn-check:not(:checked) + .proto-pill .icon-checked {
+            display: none !important;
+        }
+
+        .btn-check:not(:checked) + .proto-pill .icon-unchecked {
+            display: inline-block !important;
+        }
+
+        .btn-check:checked + .proto-pill-tcp {
+            background: #0d6efd !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px rgba(13, 110, 253, 0.3);
+        }
+
+        .btn-check:checked + .proto-pill-udp {
+            background: #0dcaf0 !important;
+            color: #052c65 !important;
+            box-shadow: 0 4px 14px rgba(13, 202, 240, 0.3);
+        }
+
+        .proto-selector.is-invalid-proto {
+            border-color: var(--bs-danger) !important;
+            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+        }
+
+        /* IP Whitelist Scroll Area */
+        .modal-ip-scroll {
+            max-height: 180px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .modal-ip-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .modal-ip-scroll::-webkit-scrollbar-thumb {
+            background: rgba(var(--primary-rgb), 0.2);
+            border-radius: 10px;
+        }
+
+        .btn-action-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-action {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+        }
+
+        /* Animations */
         .rule-card-enter {
-            animation: rule-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: rule-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         @keyframes rule-enter {
             from {
                 opacity: 0;
-                transform: translateY(30px) scale(0.95);
+                transform: translateY(20px) scale(0.97);
             }
-
             to {
                 opacity: 1;
                 transform: translateY(0) scale(1);
             }
         }
 
-        /* Responsive Container */
-        .container {
-            max-width: 100%;
-            padding-left: 1rem;
-            padding-right: 1rem;
+        .fs-xs {
+            font-size: 0.75rem;
         }
-
-        @media (min-width: 576px) {
-            .container {
-                max-width: 540px;
-            }
-        }
-
-        @media (min-width: 768px) {
-            .container {
-                max-width: 720px;
-                padding-left: 1.5rem;
-                padding-right: 1.5rem;
-            }
-        }
-
-        @media (min-width: 992px) {
-            .container {
-                max-width: 960px;
-            }
-        }
-
-        @media (min-width: 1200px) {
-            .container {
-                max-width: 1140px;
-            }
-        }
-
-        @media (min-width: 1400px) {
-            .container {
-                max-width: 1320px;
-            }
-        }
-
-        /* 移动端简化 */
+        /* Mobile Compatibility & Responsive Tweaks */
         @media (max-width: 767.98px) {
             body {
-                padding-top: 68px !important;
+                padding-top: 64px !important;
             }
 
             .navbar {
-                height: 68px !important;
+                height: 60px !important;
             }
 
-            @supports (-webkit-touch-callout: none) {
-                @media not (display-mode: standalone) {
-                    body {
-                        padding-top: calc(68px + env(safe-area-inset-top)) !important;
-                    }
-
-                    .navbar {
-                        height: calc(68px + env(safe-area-inset-top)) !important;
-                    }
-                }
-            }
-        }
-
-        .navbar-brand {
-            font-size: 1.1rem;
-        }
-
-        .btn-delete {
-            width: 2.5rem !important;
-            height: 2.5rem !important;
-            top: 0.75rem;
-            right: 0.75rem;
-            min-width: 2.5rem !important;
-            min-height: 2.5rem !important;
-            max-width: 2.5rem !important;
-            max-height: 2.5rem !important;
-            border-radius: 50% !important;
-            flex-shrink: 0 !important;
-            padding: 0 !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-
-        .card-body {
-            padding: 1rem;
-        }
-
-        .fs-sm {
-            font-size: 0.8rem !important;
-        }
-
-        .btn-group-mobile {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .btn-group-mobile .btn {
-            width: 100%;
-            text-align: center;
-        }
-
-        .input-group-mobile {
-            flex-direction: column;
-            width: 100%;
-        }
-
-        .input-group-mobile .form-control {
-            border-radius: 12px !important;
-            margin-bottom: 0.5rem;
-            width: 100% !important;
-            flex: none;
-            height: 44px !important;
-        }
-
-        .input-group-mobile .btn {
-            border-radius: 12px !important;
-            width: 100%;
-            flex: none;
-            height: 44px !important;
-            min-height: 44px !important;
-            max-height: 44px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            flex-shrink: 0 !important;
-        }
-
-        /* Override Bootstrap input-group behavior on mobile */
-        .input-group-mobile.input-group {
-            display: flex;
-            flex-wrap: wrap;
-        }
-
-        .input-group-mobile.input-group>* {
-            width: 100% !important;
-            flex: none !important;
-        }
-
-        /* Force button height controls for mobile - ALL BUTTONS */
-        .remove-ip-btn,
-        .input-group-mobile .btn,
-        .rule .input-group .btn {
-            height: 44px !important;
-            max-height: 44px !important;
-            min-height: 44px !important;
-            border-radius: 8px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            flex-shrink: 0 !important;
-            padding: 0.5rem 1rem !important;
-            font-size: 0.875rem !important;
-            gap: 0.5rem !important;
-        }
-
-        /* Style remove buttons specifically */
-        .remove-ip-btn {
-            background-color: var(--bs-danger) !important;
-            border-color: var(--bs-danger) !important;
-            color: white !important;
-            width: 100% !important;
-            border-radius: 8px !important;
-        }
-
-        .remove-ip-btn:hover {
-            background-color: var(--bs-danger) !important;
-            border-color: var(--bs-danger) !important;
-            opacity: 0.9 !important;
-        }
-
-        /* Force button height controls for mobile */
-        .input-group-mobile .btn,
-        .rule .input-group .btn,
-        .remove-ip-btn {
-            height: 44px !important;
-            max-height: 44px !important;
-            min-height: 44px !important;
-            line-height: 1.2 !important;
-            padding: 0.5rem 0.75rem !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            flex-shrink: 0 !important;
-            align-self: flex-start !important;
-        }
-
-        /* Ensure all input-groups in rules are mobile-friendly */
-        .rule .input-group {
-            display: flex !important;
-            flex-direction: column !important;
-            width: 100% !important;
-            align-items: stretch !important;
-        }
-
-        .rule .input-group .form-control {
-            width: 100% !important;
-            margin-bottom: 0.5rem !important;
-            border-radius: 12px !important;
-            height: 44px !important;
-        }
-
-        .rule .input-group .btn {
-            width: 100% !important;
-            border-radius: 8px !important;
-            height: 44px !important;
-            min-height: 44px !important;
-            max-height: 44px !important;
-            align-self: flex-start !important;
-            flex: none !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            flex-shrink: 0 !important;
-            padding: 0.5rem 1rem !important;
-            font-size: 0.875rem !important;
-            gap: 0.5rem !important;
-        }
-
-        /* Style remove buttons specifically */
-        .remove-ip-btn {
-            background-color: #dc3545 !important;
-            border-color: #dc3545 !important;
-            color: white !important;
-            border-radius: 8px !important;
-        }
-
-        .remove-ip-btn:hover {
-            background-color: #bb2d3b !important;
-            border-color: #bb2d3b !important;
-        }
-
-        /* Style Add IP button */
-        .add-ip-btn {
-            border-radius: 8px !important;
-            height: 40px !important;
-            min-height: 40px !important;
-            max-height: 40px !important;
-            padding: 0.5rem 1rem !important;
-            font-size: 0.875rem !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 0.5rem !important;
-        }
-
-        /* Tablet responsive design */
-        @media (min-width: 576px) {
-            .btn-group-tablet {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
+            .container {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
             }
 
-            /* Ensure proper spacing on small+ screens */
-            .btn-group-mobile {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
+            .navbar .container {
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+
+            input[type="text"], input[type="password"], select, textarea {
+                font-size: 16px !important; /* Prevents auto-zoom in iOS Safari */
+            }
+
+            .btn-action {
+                width: 32px;
+                height: 32px;
+                border-radius: 8px;
+            }
+
+            .btn-action-group {
+                gap: 0.35rem;
             }
         }
 
-        @media (min-width: 768px) and (max-width: 991.98px) {
-            .btn-group-tablet {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 0.5rem;
-            }
-        }
-
-        /* Large desktop optimization */
-        @media (min-width: 1200px) {
-
-            .btn-group-mobile,
-            .btn-group-tablet {
-                display: flex;
-                flex-wrap: nowrap;
-                gap: 0.75rem;
-                width: auto;
-            }
-
-            /* Ensure title and buttons stay on same line */
-            .d-flex.flex-column.flex-sm-row {
-                flex-wrap: nowrap;
-            }
-
-            .d-flex.flex-column.flex-sm-row h1 {
-                white-space: nowrap;
-                margin-right: 2rem;
-            }
-        }
-
-        /* Enhanced form controls */
-        .form-control {
-            border-radius: 12px;
-            border: 1px solid rgba(var(--primary-rgb), 0.2);
-            transition: all 0.3s ease;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        .form-control:focus {
-            border-color: rgb(var(--primary-rgb));
-            box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb), 0.25);
-        }
-
-        .form-check-input {
-            border-radius: 6px;
-        }
-
-        /* Ensure input groups work properly */
-        .input-group {
-            width: 100%;
-        }
-
-        .input-group .form-control {
-            min-width: 0;
-            flex: 1 1 auto;
-        }
-
-        /* IP Pool enhancements */
-        .ip-pool-item {
-            transition: all 0.3s ease;
-        }
-
-        .ip-pool-item:hover {
-            transform: translateX(4px);
-        }
-
-        /* Toast improvements */
-        .toast {
-            border-radius: 12px;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-        }
-
-        /* Smooth scrolling */
-        html {
-            scroll-behavior: smooth;
-        }
-
-        /* Loading states */
-        .btn-loading {
-            position: relative;
-            pointer-events: none;
-        }
-
-        .btn-loading::after {
-            content: '';
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            margin: auto;
-            border: 2px solid transparent;
-            border-top-color: currentColor;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* Dark mode specific enhancements */
-        [data-bs-theme="dark"] .card {
-            background: rgba(var(--card-bg-rgb), 0.7);
-        }
-
-        [data-bs-theme="dark"] .navbar {
-            background: rgba(var(--card-bg-rgb), 0.8);
-        }
-
-        /* 小屏幕简化 */
         @media (max-width: 575.98px) {
-            body {
-                padding-top: 66px !important;
+            .top-toolbar-btns {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.4rem !important;
+                width: 100% !important;
             }
 
-            .navbar {
-                height: 66px !important;
+            .top-toolbar-btns #add-rule-btn {
+                grid-column: 1 / -1;
+                padding: 0.6rem 0.5rem !important;
+                font-size: 0.9rem !important;
+                font-weight: 700 !important;
             }
 
-            @supports (-webkit-touch-callout: none) {
-                @media not (display-mode: standalone) {
-                    body {
-                        padding-top: calc(66px + env(safe-area-inset-top)) !important;
-                    }
-
-                    .navbar {
-                        height: calc(66px + env(safe-area-inset-top)) !important;
-                    }
-                }
-            }
-        }
-
-        .container {
-            padding-left: 0.75rem;
-            padding-right: 0.75rem;
-        }
-
-        .card-header .card-title {
-            font-size: 1rem;
-        }
-
-        .badge {
-            font-size: 0.7rem;
-        }
-
-        .text-monospace {
-            font-size: 0.85rem;
-        }
-
-        h1 {
-            font-size: 1.5rem;
-        }
-
-        .btn-delete {
-            width: 2.5rem !important;
-            height: 2.5rem !important;
-            top: 0.75rem;
-            right: 0.75rem;
-            min-width: 2.5rem !important;
-            min-height: 2.5rem !important;
-            max-width: 2.5rem !important;
-            max-height: 2.5rem !important;
-            border-radius: 50% !important;
-            flex-shrink: 0 !important;
-            padding: 0 !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-
-        /* Ensure button text fits properly */
-        .btn {
-            font-size: 0.9rem;
-            padding: 0.5rem 0.75rem;
-        }
-
-        .btn-sm {
-            font-size: 0.8rem;
-            padding: 0.375rem 0.5rem;
-        }
-
-        /* Allow text wrapping for longer button labels */
-        .btn span {
-            white-space: normal;
-            line-height: 1.2;
-        }
-
-        /* Force full width for IP input containers */
-        .allowed-ips-list {
-            width: 100%;
-        }
-
-        .allowed-ips-list .input-group,
-        .allowed-ips-list .input-group-mobile {
-            width: 100% !important;
-            display: flex !important;
-            flex-direction: column !important;
-        }
-
-        .allowed-ips-list .form-control,
-        .allowed-ips-list .rule-allowed-ip {
-            width: 100% !important;
-            margin-bottom: 0.5rem !important;
-            border-radius: 12px !important;
-            min-width: 0 !important;
-            flex: none !important;
-        }
-
-        .allowed-ips-list .btn,
-        .allowed-ips-list .remove-ip-btn {
-            width: 100% !important;
-            border-radius: 12px !important;
-            flex: none !important;
-            height: auto !important;
-            min-height: 44px !important;
-            max-height: 48px !important;
-            align-self: flex-start !important;
-        }
-
-        /* Ensure rule form controls take full width */
-        .rule-from,
-        .rule-to {
-            width: 100% !important;
-        }
-
-        /* Override any Bootstrap input-group styles on mobile */
-        .card-body .input-group {
-            width: 100% !important;
-            flex-direction: column !important;
-            align-items: stretch !important;
-        }
-
-        .card-body .input-group>* {
-            width: 100% !important;
-            flex: none !important;
-            border-radius: 12px !important;
-        }
-
-        .card-body .input-group .form-control {
-            margin-bottom: 0.5rem !important;
-        }
-
-        .card-body .input-group .btn {
-            height: auto !important;
-            min-height: 44px !important;
-            max-height: 48px !important;
-            align-self: flex-start !important;
-        }
-
-        /* Specific fix for IP input fields in rules */
-        .rule .input-group {
-            display: flex !important;
-            flex-direction: column !important;
-            width: 100% !important;
-            align-items: stretch !important;
-        }
-
-        .rule .input-group .form-control {
-            width: 100% !important;
-            margin-bottom: 0.5rem !important;
-            border-radius: 12px !important;
-            border-top-right-radius: 12px !important;
-            border-bottom-right-radius: 12px !important;
-        }
-
-        .rule .input-group .btn {
-            width: 100% !important;
-            border-radius: 8px !important;
-            border-top-left-radius: 8px !important;
-            border-bottom-left-radius: 8px !important;
-            height: 44px !important;
-            min-height: 44px !important;
-            max-height: 44px !important;
-            align-self: flex-start !important;
-            flex: none !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            flex-shrink: 0 !important;
-            padding: 0.5rem 1rem !important;
-            font-size: 0.875rem !important;
-            gap: 0.5rem !important;
-        }
-
-        /* Style Add IP button */
-        .add-ip-btn {
-            border-radius: 8px !important;
-            height: 40px !important;
-            min-height: 40px !important;
-            max-height: 40px !important;
-            padding: 0.5rem 1rem !important;
-            font-size: 0.875rem !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 0.5rem !important;
-        }
-
-        /* Touch-friendly improvements */
-        @media (hover: none) and (pointer: coarse) {
-            .btn {
-                min-height: 44px;
-                padding: 0.75rem 1rem;
+            .top-toolbar-btns .btn {
+                padding: 0.45rem 0.25rem !important;
+                font-size: 0.75rem !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                white-space: nowrap;
+                border-radius: 10px !important;
             }
 
-            .btn-sm {
-                min-height: 36px;
-                padding: 0.5rem 0.75rem;
+            .network-flow-box {
+                padding: 0.5rem 0.65rem !important;
+                margin-bottom: 0.65rem !important;
             }
 
-            .form-control {
-                min-height: 44px;
-                font-size: 16px;
-                /* Prevents zoom on iOS */
+            .network-flow-box .fs-6 {
+                font-size: 0.8rem !important;
             }
 
-            .form-check-input {
-                width: 1.25rem;
-                height: 1.25rem;
+            .rule-card {
+                padding: 0.85rem !important;
+                border-radius: 14px !important;
             }
-        }
 
-        /* Accessibility improvements */
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
+            .modal-dialog {
+                margin: 0.5rem auto !important;
+                max-width: calc(100vw - 1rem) !important;
             }
-        }
 
-        /* Focus improvements for keyboard navigation */
-        .btn:focus,
-        .form-control:focus,
-        .form-check-input:focus {
-            outline: 2px solid rgb(var(--primary-rgb));
-            outline-offset: 2px;
+            .modal-content {
+                border-radius: 16px !important;
+            }
+
+            .modal-header {
+                padding: 0.85rem 1rem !important;
+            }
+
+            .modal-body {
+                padding: 0.85rem 1rem !important;
+            }
+
+            .modal-footer {
+                padding: 0.75rem 1rem !important;
+            }
+
+            .proto-selector {
+                padding: 0.25rem !important;
+                gap: 0.35rem !important;
+                border-radius: 12px !important;
+            }
+
+            .proto-pill {
+                padding: 0.45rem 0.35rem !important;
+                font-size: 0.78rem !important;
+                border-radius: 8px !important;
+            }
+
+            .temp-ip-card {
+                padding: 0.45rem 0.65rem !important;
+                border-radius: 10px !important;
+            }
+
+            /* Confirm Modal Mobile Polish */
+            #confirmModal .modal-dialog {
+                max-width: 300px !important;
+                margin: auto !important;
+            }
+
+            #confirmModal .modal-body {
+                padding: 1rem 0.85rem !important;
+            }
+
+            #confirmModal #confirm-icon-container {
+                padding: 0.6rem !important;
+                margin-bottom: 0.6rem !important;
+            }
+
+            #confirmModal #confirm-icon {
+                font-size: 1.5rem !important;
+            }
+
+            #confirmModal #confirm-title {
+                font-size: 1rem !important;
+            }
+
+            #confirmModal #confirm-message {
+                font-size: 0.78rem !important;
+            }
         }
     </style>
-    <link rel="preconnect" href="https://rsms.me/">
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 </head>
 
 <body>
 
+    <!-- Header Navbar -->
     <nav class="navbar navbar-expand-lg shadow-sm">
         <div class="container">
             <a class="navbar-brand fw-bold" href="#">
@@ -875,91 +511,201 @@
                     <i class="bi bi-box-arrow-right me-1"></i>
                     <span class="d-none d-md-inline">Logout</span>
                 </button>
-                <button id="theme-switcher" class="btn border-0 rounded-pill p-2">
+                <button id="theme-switcher" class="btn border-0 rounded-pill p-2" aria-label="Toggle Theme">
                     <i class="bi bi-sun-fill"></i>
                 </button>
             </div>
         </div>
     </nav>
 
+    <!-- Main Container -->
     <div class="container py-3">
-        <div
-            class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-3 pb-2 border-bottom border-primary-subtle">
-            <h1 class="text-body-emphasis mb-3 mb-sm-0">Configuration Rules</h1>
-            <div class="btn-group-mobile btn-group-tablet d-grid d-sm-flex gap-2 w-100 w-sm-auto">
-                <button id="add-rule" class="btn btn-primary">
-                    <i class="bi bi-plus-circle-fill me-2"></i>
+        <!-- Top Toolbar -->
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 pb-3 border-bottom border-primary-subtle gap-3">
+            <div>
+                <h2 class="text-body-emphasis fw-bold mb-1">Port Forwarding Rules</h2>
+                <p class="text-muted small mb-0">Manage TCP/UDP network forwarding and access control rules</p>
+            </div>
+            <div class="top-toolbar-btns d-flex flex-wrap gap-2 w-100 w-md-auto">
+                <button id="add-rule-btn" class="btn btn-primary px-3">
+                    <i class="bi bi-plus-lg me-1.5"></i>
                     <span>Add Rule</span>
                 </button>
-                <button id="allow-my-ip" class="btn btn-info">
-                    <i class="bi bi-person-check-fill me-2"></i>
+                <button id="allow-my-ip" class="btn btn-info px-3">
+                    <i class="bi bi-person-check-fill me-1.5"></i>
                     <span class="d-none d-lg-inline">Allow My IP Range</span>
                     <span class="d-lg-none">My IP Range</span>
                 </button>
-                <button id="allow-current-ip" class="btn btn-warning">
-                    <i class="bi bi-shield-check me-2"></i>
+                <button id="allow-current-ip" class="btn btn-warning px-3">
+                    <i class="bi bi-shield-check me-1.5"></i>
                     <span class="d-none d-lg-inline">Allow Current IP</span>
                     <span class="d-lg-none">Current IP</span>
                 </button>
-                <button id="view-duplicate-requests" class="btn btn-outline-danger" disabled>
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <button id="view-duplicate-requests" class="btn btn-outline-danger px-3" disabled>
+                    <i class="bi bi-exclamation-triangle-fill me-1.5"></i>
                     <span class="d-none d-lg-inline">Duplicate Requests</span>
                     <span class="d-lg-none">Duplicates</span>
-                </button>
-                <button id="save-config" class="btn btn-success">
-                    <i class="bi bi-check-circle-fill me-2"></i>
-                    <span>Save and Apply</span>
                 </button>
             </div>
         </div>
 
         <!-- Temporary IP Pool Section -->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header bg-info bg-opacity-10">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-shield-check-fill text-info me-2"></i>
-                    Temporary IP Whitelist
-                    <span id="ip-pool-count" class="badge bg-info rounded-pill ms-2">0/10</span>
-                </h5>
+        <div class="glass-card mb-4">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="bg-info bg-opacity-10 text-info p-2 rounded-3 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                        <i class="bi bi-shield-lock-fill fs-5"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-0">Temporary IP Whitelist</h6>
+                        <span class="text-muted fs-xs">Transient client IPs allowed through all rules (LRU Eviction)</span>
+                    </div>
+                </div>
+                <span id="ip-pool-count" class="badge bg-info-subtle text-info border border-info-subtle rounded-pill">0/10</span>
             </div>
-            <div class="card-body">
-                <p class="text-muted mb-3">
-                    <i class="bi bi-info-circle me-1"></i>
-                    <span>These IPs are temporarily allowed through all rules. Pool uses LRU (Least Recently Used)
-                        eviction when full.</span>
-                    <br><small class="text-success">
-                        <i class="bi bi-arrow-up-circle"></i>
-                        <strong>Top = Newest</strong>
-                        <span class="d-none d-md-inline">(most recent, safe)</span>
-                        <i class="bi bi-arrow-right"></i>
-                        <strong>Bottom = Oldest</strong>
-                        <span class="d-none d-md-inline">(will be evicted first)</span>
-                        <i class="bi bi-arrow-down-circle text-danger"></i>
-                    </small>
-                </p>
-                <div id="ip-pool-empty" class="text-center text-muted py-3" style="display: none;">
-                    <i class="bi bi-inbox display-6 d-block mb-2"></i>
-                    No temporary IPs currently allowed
+
+            <div class="p-3">
+                <div id="ip-pool-empty" class="text-center text-muted py-4" style="display: none;">
+                    <i class="bi bi-shield-slash fs-1 text-secondary opacity-50 d-block mb-2"></i>
+                    <span class="fs-sm">No temporary IPs currently whitelisted</span>
                 </div>
-                <div id="ip-pool-container" class="d-flex flex-column gap-2">
-                    <!-- IP列表纵向排列 -->
-                </div>
-                <div class="d-flex gap-2 mt-3">
-                    <button id="refresh-ip-pool" class="btn btn-outline-info btn-sm">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-                    </button>
+                <div id="ip-pool-container" class="row g-2">
+                    <!-- Dynamic IP Pool Items -->
                 </div>
             </div>
         </div>
 
-        <div id="rules-container" class="row g-4"></div>
+        <!-- Rules List Container -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h5 class="fw-bold mb-0">
+                <i class="bi bi-list-stars text-primary me-2"></i>Active Forwarding Rules
+                <span id="rules-count" class="badge bg-secondary-subtle text-secondary rounded-pill ms-1">0</span>
+            </h5>
+        </div>
+
+        <div id="rules-empty" class="glass-card p-5 text-center text-muted my-3" style="display: none;">
+            <i class="bi bi-inbox fs-1 text-primary opacity-50 d-block mb-3"></i>
+            <h5 class="fw-bold text-body">No Forwarding Rules Found</h5>
+            <p class="fs-sm mb-3">Get started by creating a new network forwarding rule.</p>
+            <button class="btn btn-primary rounded-pill px-4" id="empty-add-rule-btn">
+                <i class="bi bi-plus-lg me-1"></i>Add First Rule
+            </button>
+        </div>
+
+        <div id="rules-container" class="row g-3">
+            <!-- Dynamic Rule Cards -->
+        </div>
     </div>
 
-    <!-- Toast Container -->
-    <div class="toast-container position-fixed top-0 end-0 p-3">
-        <div id="liveToast" class="toast border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <!-- Rule Modal (Add / Edit) -->
+    <div class="modal fade" id="ruleModal" tabindex="-1" aria-labelledby="ruleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-bottom px-4 py-3">
+                    <div>
+                        <h5 class="modal-title fw-bold text-body-emphasis mb-0" id="ruleModalTitle">Add Forwarding Rule</h5>
+                        <small class="text-muted">Configure port forwarding rule and access control whitelist</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form id="ruleForm" onsubmit="return false;">
+                        <input type="hidden" id="modal-rule-index" value="-1">
+
+                        <!-- Protocols Selection Segmented Controls -->
+                        <div class="mb-4">
+                            <label class="form-label fs-xs text-uppercase fw-bold text-muted mb-2">
+                                Protocol Selection <span class="text-danger">*</span>
+                            </label>
+                            <div class="proto-selector" id="modal-proto-selector">
+                                <input type="checkbox" class="btn-check" id="modal-proto-tcp" checked autocomplete="off">
+                                <label class="proto-pill proto-pill-tcp" for="modal-proto-tcp">
+                                    <i class="bi bi-check-square-fill icon-checked fs-5"></i>
+                                    <i class="bi bi-square icon-unchecked fs-5 opacity-50"></i>
+                                    <span>TCP Protocol</span>
+                                </label>
+
+                                <input type="checkbox" class="btn-check" id="modal-proto-udp" checked autocomplete="off">
+                                <label class="proto-pill proto-pill-udp" for="modal-proto-udp">
+                                    <i class="bi bi-check-square-fill icon-checked fs-5"></i>
+                                    <i class="bi bi-square icon-unchecked fs-5 opacity-50"></i>
+                                    <span>UDP Protocol</span>
+                                </label>
+                            </div>
+                            <div id="modal-proto-error" class="text-danger fs-xs mt-1.5 fw-medium" style="display: none;">
+                                <i class="bi bi-exclamation-circle-fill me-1"></i>At least one protocol (TCP or UDP) must be selected.
+                            </div>
+                        </div>
+
+                        <!-- Source and Destination Addresses -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-12 col-md-6">
+                                <label for="modal-rule-from" class="form-label fs-xs text-uppercase fw-bold text-muted mb-1">Source (From) <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control font-monospace py-2 px-3" id="modal-rule-from" placeholder="e.g. 0.0.0.0:8080 or :8080" required>
+                                <div class="form-text fs-xs text-muted">Listening IP & port on server</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="modal-rule-to" class="form-label fs-xs text-uppercase fw-bold text-muted mb-1">Destination (To) <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control font-monospace py-2 px-3" id="modal-rule-to" placeholder="e.g. 127.0.0.1:80" required>
+                                <div class="form-text fs-xs text-muted">Target IP & port</div>
+                            </div>
+                        </div>
+
+                        <!-- Allowed IPs Whitelist with Scroll Area -->
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fs-xs text-uppercase fw-bold text-muted mb-0">
+                                    Allowed IP Whitelist <span class="fw-normal text-none fs-xs opacity-75">(Blank = Public)</span>
+                                </label>
+                                <button type="button" class="btn btn-xs btn-link text-decoration-none p-0 text-info fw-semibold" id="modal-add-my-ip-btn">
+                                    <i class="bi bi-plus-circle me-1"></i>Add My IP
+                                </button>
+                            </div>
+
+                            <div class="modal-ip-scroll mb-2">
+                                <div id="modal-ip-list-container" class="d-flex flex-column gap-2">
+                                    <!-- Dynamic IP Rows -->
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1" id="modal-add-ip-row-btn">
+                                <i class="bi bi-plus-lg me-1"></i>Add IP
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-top px-4 py-3">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" id="modal-save-rule-btn">Save Rule</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unified Custom Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true" style="z-index: 1095;">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0 shadow-lg text-center p-3">
+                <div class="modal-body p-3">
+                    <div id="confirm-icon-container" class="mb-3 d-inline-flex p-3 rounded-circle bg-warning bg-opacity-10 text-warning">
+                        <i id="confirm-icon" class="bi bi-exclamation-triangle-fill fs-2"></i>
+                    </div>
+                    <h5 id="confirm-title" class="fw-bold text-body-emphasis mb-2">Confirm Action</h5>
+                    <p id="confirm-message" class="text-muted fs-sm mb-0">Are you sure you want to proceed?</p>
+                </div>
+                <div class="modal-footer border-top-0 justify-content-center gap-2 pb-2 pt-0">
+                    <button type="button" class="btn btn-light border rounded-pill px-4" id="confirm-cancel-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger rounded-pill px-4 fw-semibold" id="confirm-ok-btn">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1090;">
+        <div id="liveToast" class="toast border-0 shadow-lg rounded-3" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-header">
-                <strong class="me-auto"><i class="bi bi-bell-fill"></i> Notification</strong>
+                <strong class="me-auto"><i class="bi bi-bell-fill me-1"></i> System Notification</strong>
                 <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
             </div>
             <div class="toast-body"></div>
@@ -970,37 +716,29 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // Service Worker Registration and PWA Install Prompt
+        // Service Worker & PWA Support
         let deferredPrompt;
         let installButton;
 
-        // Register Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', async () => {
                 try {
                     const registration = await navigator.serviceWorker.register('/service-worker.js');
-                    console.log('[PWA] Service Worker registered:', registration);
-
-                    // Force update to get the latest service worker
                     await registration.update();
-
-                    // Handle updates
                     registration.addEventListener('updatefound', () => {
                         const newWorker = registration.installing;
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                // New update available
                                 showUpdateAvailable();
                             }
                         });
                     });
                 } catch (error) {
-                    console.error('[PWA] Service Worker registration failed:', error);
+                    console.error('[PWA] Service Worker registration error:', error);
                 }
             });
         }
 
-        // PWA Install Prompt
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
@@ -1008,7 +746,6 @@
         });
 
         window.addEventListener('appinstalled', () => {
-            console.log('[PWA] App was installed');
             hideInstallButton();
             deferredPrompt = null;
         });
@@ -1028,84 +765,58 @@
                     background: rgba(255,255,255,0.9);
                 `;
                 installButton.innerHTML = '<i class="bi bi-download me-1"></i>Install App';
-                installButton.addEventListener('click', installApp);
+                installButton.addEventListener('click', async () => {
+                    if (deferredPrompt) {
+                        deferredPrompt.prompt();
+                        await deferredPrompt.userChoice;
+                        deferredPrompt = null;
+                        hideInstallButton();
+                    }
+                });
                 document.body.appendChild(installButton);
             }
             installButton.style.display = 'block';
         }
 
         function hideInstallButton() {
-            if (installButton) {
-                installButton.style.display = 'none';
-            }
-        }
-
-        async function installApp() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const result = await deferredPrompt.userChoice;
-                console.log('[PWA] User choice:', result);
-                deferredPrompt = null;
-                hideInstallButton();
-            }
+            if (installButton) installButton.style.display = 'none';
         }
 
         function showUpdateAvailable() {
             const updateBanner = document.createElement('div');
             updateBanner.className = 'alert alert-info alert-dismissible fade show position-fixed';
-            updateBanner.style.cssText = `
-                top: 20px;
-                left: 20px;
-                right: 20px;
-                z-index: 1060;
-                max-width: 400px;
-                margin: 0 auto;
-            `;
+            updateBanner.style.cssText = `top: 20px; left: 20px; right: 20px; z-index: 1060; max-width: 400px; margin: 0 auto;`;
             updateBanner.innerHTML = `
-                <i class="bi bi-arrow-clockwise me-2"></i>
-                <strong>Update Available!</strong>
+                <i class="bi bi-arrow-clockwise me-2"></i><strong>Update Available!</strong>
                 <span class="d-block d-sm-inline">Refresh to get the latest version.</span>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                <div class="mt-2">
-                    <button class="btn btn-sm btn-primary" onclick="window.location.reload()">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh Now
-                    </button>
-                </div>
+                <div class="mt-2"><button class="btn btn-sm btn-primary" onclick="window.location.reload()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Now</button></div>
             `;
             document.body.appendChild(updateBanner);
-
-            // Auto-hide after 10 seconds
-            setTimeout(() => {
-                if (updateBanner.parentNode) {
-                    updateBanner.remove();
-                }
-            }, 10000);
+            setTimeout(() => { if (updateBanner.parentNode) updateBanner.remove(); }, 10000);
         }
 
-
         document.addEventListener('DOMContentLoaded', async () => {
-
-            // 检查认证状态
+            // Check auth status
             try {
                 const response = await fetch('/api/config');
                 if (!response.ok) {
-                    // 认证失败，跳转到登录页
                     window.location.href = '/login';
                     return;
                 }
             } catch (error) {
-                // 网络错误，也跳转到登录页
                 window.location.href = '/login';
                 return;
             }
 
             const rulesContainer = document.getElementById('rules-container');
-            const addRuleBtn = document.getElementById('add-rule');
-            const saveConfigBtn = document.getElementById('save-config');
+            const rulesEmpty = document.getElementById('rules-empty');
+            const rulesCount = document.getElementById('rules-count');
+            const addRuleBtn = document.getElementById('add-rule-btn');
+            const emptyAddRuleBtn = document.getElementById('empty-add-rule-btn');
             const allowMyIpBtn = document.getElementById('allow-my-ip');
             const allowCurrentIpBtn = document.getElementById('allow-current-ip');
             const viewDuplicateRequestsBtn = document.getElementById('view-duplicate-requests');
-            const refreshIpPoolBtn = document.getElementById('refresh-ip-pool');
             const themeSwitcherBtn = document.getElementById('theme-switcher');
             const logoutBtn = document.getElementById('logout-btn');
             const htmlEl = document.documentElement;
@@ -1114,18 +825,99 @@
             const toastBody = toastEl.querySelector('.toast-body');
             const bsToast = new bootstrap.Toast(toastEl);
 
-            let currentConfig = {};
+            // Modal elements
+            const ruleModalEl = document.getElementById('ruleModal');
+            const bsRuleModal = new bootstrap.Modal(ruleModalEl);
+            const ruleModalTitle = document.getElementById('ruleModalTitle');
+            const modalRuleIndex = document.getElementById('modal-rule-index');
+            const modalProtoTcp = document.getElementById('modal-proto-tcp');
+            const modalProtoUdp = document.getElementById('modal-proto-udp');
+            const modalRuleFrom = document.getElementById('modal-rule-from');
+            const modalRuleTo = document.getElementById('modal-rule-to');
+            const modalIpListContainer = document.getElementById('modal-ip-list-container');
+            const modalAddIpRowBtn = document.getElementById('modal-add-ip-row-btn');
+            const modalAddMyIpBtn = document.getElementById('modal-add-my-ip-btn');
+            const modalSaveRuleBtn = document.getElementById('modal-save-rule-btn');
+
+            let currentConfig = { forwards: [] };
             let currentClientIP = '';
             let tempIPPool = [];
 
-            // --- IP Pool Management ---
+            const showToast = (message, isError = false) => {
+                toastBody.textContent = message;
+                toastEl.classList.remove('bg-success-subtle', 'text-success-emphasis', 'bg-danger-subtle', 'text-danger-emphasis');
+                toastEl.classList.add(isError ? 'bg-danger-subtle' : 'bg-success-subtle', isError ? 'text-danger-emphasis' : 'text-success-emphasis');
+                bsToast.show();
+            };
+
+            const showConfirmDialog = ({
+                title = 'Confirm Action',
+                message = 'Are you sure you want to proceed?',
+                confirmText = 'Confirm',
+                confirmBtnClass = 'btn-danger',
+                iconClass = 'bi-exclamation-triangle-fill text-warning',
+                iconBgClass = 'bg-warning bg-opacity-10'
+            } = {}) => {
+                return new Promise((resolve) => {
+                    const confirmModalEl = document.getElementById('confirmModal');
+                    const bsConfirmModal = bootstrap.Modal.getOrCreateInstance(confirmModalEl);
+
+                    document.getElementById('confirm-title').textContent = title;
+                    document.getElementById('confirm-message').innerHTML = message;
+
+                    const okBtn = document.getElementById('confirm-ok-btn');
+                    okBtn.textContent = confirmText;
+                    okBtn.className = `btn rounded-pill px-4 fw-semibold ${confirmBtnClass}`;
+
+                    const iconContainer = document.getElementById('confirm-icon-container');
+                    iconContainer.className = `mb-3 d-inline-flex p-3 rounded-circle ${iconBgClass}`;
+
+                    const iconEl = document.getElementById('confirm-icon');
+                    iconEl.className = `bi ${iconClass} fs-2`;
+
+                    let userChoice = false;
+
+                    const onConfirmClick = () => {
+                        userChoice = true;
+                        bsConfirmModal.hide();
+                    };
+
+                    const onHidden = () => {
+                        okBtn.removeEventListener('click', onConfirmClick);
+                        confirmModalEl.removeEventListener('hidden.bs.modal', onHidden);
+                        resolve(userChoice);
+                    };
+
+                    okBtn.addEventListener('click', onConfirmClick);
+                    confirmModalEl.addEventListener('hidden.bs.modal', onHidden);
+
+                    bsConfirmModal.show();
+                });
+            };
+
+            // Theme setup
+            const applyTheme = (theme) => {
+                htmlEl.setAttribute('data-bs-theme', theme);
+                themeSwitcherBtn.innerHTML = theme === 'dark' ? '<i class="bi bi-moon-stars-fill"></i>' : '<i class="bi bi-sun-fill"></i>';
+                let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+                if (themeColorMeta) themeColorMeta.content = theme === 'dark' ? '#0a0e18' : '#f8f9fa';
+            };
+
+            const currentTheme = htmlEl.getAttribute('data-bs-theme') || 'light';
+            applyTheme(currentTheme);
+
+            themeSwitcherBtn.addEventListener('click', () => {
+                const nextTheme = htmlEl.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+                try { localStorage.setItem('theme', nextTheme); } catch (e) {}
+                applyTheme(nextTheme);
+            });
+
+            // IP Pool display logic
             const loadIPPool = async () => {
                 try {
                     const response = await fetch('/api/ip-pool');
                     if (!response.ok) return;
                     const data = await response.json();
-
-                    // Store IP pool data globally
                     tempIPPool = data.ips || [];
 
                     const poolContainer = document.getElementById('ip-pool-container');
@@ -1136,75 +928,43 @@
 
                     if (data.ips && data.ips.length > 0) {
                         poolEmpty.style.display = 'none';
-                        // 实时获取当前主题
-                        const currentTheme = htmlEl.getAttribute('data-bs-theme');
-                        const bgClass = currentTheme === 'dark' ? 'bg-dark' : 'bg-light';
-
-                        // 反转数组显示，让最新的IP在顶部
                         const reversedIps = [...data.ips].reverse();
 
                         poolContainer.innerHTML = reversedIps.map((ipEntry, displayIndex) => {
                             const originalIndex = data.ips.length - 1 - displayIndex;
                             const isNewest = originalIndex === data.ips.length - 1;
                             const isOldest = originalIndex === 0;
-                            let badgeClass, badgeText, positionIcon, riskLevel;
 
+                            let statusBadgeHTML;
                             if (isNewest) {
-                                badgeClass = 'bg-success';
-                                badgeText = 'Newest';
-                                positionIcon = '<i class="bi bi-shield-check me-1"></i>';
-                                riskLevel = 'border border-success';
+                                statusBadgeHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill fs-xs"><i class="bi bi-shield-check me-1"></i>Newest</span>';
                             } else if (isOldest) {
-                                badgeClass = 'bg-danger';
-                                badgeText = 'Oldest';
-                                positionIcon = '<i class="bi bi-exclamation-triangle me-1"></i>';
-                                riskLevel = 'border border-danger';
+                                statusBadgeHTML = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill fs-xs"><i class="bi bi-exclamation-triangle me-1"></i>Oldest</span>';
                             } else {
-                                const totalIps = data.ips.length;
-                                const riskScore = (totalIps - 1 - originalIndex) / (totalIps - 1);
-                                if (riskScore < 0.3) {
-                                    badgeClass = 'bg-warning text-dark';
-                                    positionIcon = '<i class="bi bi-dash-circle me-1"></i>';
-                                } else {
-                                    badgeClass = 'bg-secondary';
-                                    positionIcon = '';
-                                }
-                                badgeText = `#${displayIndex + 1}`;
-                                riskLevel = '';
+                                statusBadgeHTML = `<span class="badge bg-secondary-subtle text-secondary rounded-pill fs-xs">#${displayIndex + 1}</span>`;
                             }
 
-                            // Format last triggered time
                             const lastTriggered = new Date(ipEntry.last_triggered);
-                            const now = new Date();
-                            const diffMs = now - lastTriggered;
-                            const diffMins = Math.floor(diffMs / (1000 * 60));
-                            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                            const diffMs = new Date() - lastTriggered;
+                            const diffMins = Math.floor(diffMs / 60000);
+                            const diffHours = Math.floor(diffMs / 3600000);
+                            const diffDays = Math.floor(diffMs / 86400000);
 
-                            let timeAgo;
-                            if (diffDays > 0) {
-                                timeAgo = `${diffDays}d ago`;
-                            } else if (diffHours > 0) {
-                                timeAgo = `${diffHours}h ago`;
-                            } else if (diffMins > 0) {
-                                timeAgo = `${diffMins}m ago`;
-                            } else {
-                                timeAgo = 'Just now';
-                            }
+                            let timeAgo = diffDays > 0 ? `${diffDays}d ago` : diffHours > 0 ? `${diffHours}h ago` : diffMins > 0 ? `${diffMins}m ago` : 'Just now';
 
                             return `
-                                <div class="d-flex align-items-center justify-content-between ${bgClass} rounded p-2 ip-pool-item ${riskLevel}">
-                                    <div class="flex-grow-1 me-2">
-                                        <div class="text-monospace fw-bold" style="word-break: break-all;">${ipEntry.ip}</div>
-                                        <small class="text-muted">
-                                            <i class="bi bi-clock me-1"></i>Last used: ${timeAgo}
-                                        </small>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
-                                        <span class="badge ${badgeClass} rounded-pill">${positionIcon}${badgeText}</span>
-                                        <button class="btn btn-outline-danger btn-sm remove-temp-ip-btn" data-ip="${ipEntry.ip}" title="Remove IP">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                                <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+                                    <div class="temp-ip-card d-flex align-items-center justify-content-between">
+                                        <div class="overflow-hidden me-2">
+                                            <div class="font-monospace fw-bold fs-sm text-truncate">${ipEntry.ip}</div>
+                                            <div class="text-muted fs-xs"><i class="bi bi-clock me-1"></i>${timeAgo}</div>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-1.5 flex-shrink-0">
+                                            ${statusBadgeHTML}
+                                            <button class="btn btn-action btn-outline-danger border-0 remove-temp-ip-btn" data-ip="${ipEntry.ip}" title="Remove IP">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             `;
@@ -1216,242 +976,158 @@
                 } catch (error) {
                     console.error('Error loading IP pool:', error);
                 } finally {
-                    // Update button state after loading IP pool
                     updateAllowCurrentIpButton();
                 }
             };
 
-            // --- IP Fetching ---
+            // Client IP fetching & button updates
             const fetchAndDisplayIP = async () => {
                 try {
                     const response = await fetch('/api/ip');
                     if (!response.ok) return;
                     const data = await response.json();
-
-                    // Store current client IP globally
                     currentClientIP = data.ip || '';
-
                     const ipEl = document.getElementById('client-ip');
                     if (data.ip) {
-                        // Show different format on mobile vs desktop
-                        if (window.innerWidth < 768) {
-                            ipEl.innerHTML = `<i class="bi bi-pc-display-horizontal"></i> ${data.ip}`;
-                        } else {
-                            ipEl.innerHTML = `<i class="bi bi-pc-display-horizontal"></i> <strong>Your IP:</strong> ${data.ip}`;
-                        }
+                        ipEl.innerHTML = `<i class="bi bi-pc-display-horizontal me-1"></i><strong>IP:</strong> ${data.ip}`;
                     }
                 } catch (error) {
                     console.error('Error fetching IP:', error);
                 } finally {
-                    // Update button state after fetching current IP
                     updateAllowCurrentIpButton();
                 }
             };
 
-            // --- Update Allow Current IP Button State ---
             const updateAllowCurrentIpButton = () => {
-                // Check if current IP exists in temporary IP pool
-                if (!currentClientIP || tempIPPool.length === 0) {
-                    return;
-                }
-
-                const ipExistsInPool = tempIPPool.some(ipEntry => ipEntry.ip === currentClientIP);
-
-                if (ipExistsInPool) {
-                    // Disable button if IP already exists in pool
+                if (!currentClientIP || tempIPPool.length === 0) return;
+                const exists = tempIPPool.some(entry => entry.ip === currentClientIP);
+                if (exists) {
                     allowCurrentIpBtn.disabled = true;
-                    allowCurrentIpBtn.title = 'Your IP is already in the temporary whitelist';
+                    allowCurrentIpBtn.title = 'Your IP is already whitelisted';
                 } else {
-                    // Enable button if IP is not in pool
                     allowCurrentIpBtn.disabled = false;
                     allowCurrentIpBtn.title = '';
                 }
             };
 
-            // --- Duplicate Requests Check ---
+            // Duplicate requests check
             const checkDuplicateRequests = async () => {
                 try {
                     const response = await fetch('/api/duplicate-requests');
                     if (!response.ok) return;
                     const data = await response.json();
-
                     if (data.count > 0) {
-                        // Enable button and update its appearance
                         viewDuplicateRequestsBtn.disabled = false;
                         viewDuplicateRequestsBtn.classList.remove('btn-outline-danger');
                         viewDuplicateRequestsBtn.classList.add('btn-danger');
-                        // Add count badge to button
-                        const existingBadge = viewDuplicateRequestsBtn.querySelector('.badge');
+                        let existingBadge = viewDuplicateRequestsBtn.querySelector('.badge');
                         if (!existingBadge) {
-                            const countBadge = document.createElement('span');
-                            countBadge.className = 'badge bg-light text-dark rounded-pill ms-2';
-                            countBadge.textContent = data.count;
-                            viewDuplicateRequestsBtn.appendChild(countBadge);
+                            const badge = document.createElement('span');
+                            badge.className = 'badge bg-light text-dark rounded-pill ms-1.5';
+                            badge.textContent = data.count;
+                            viewDuplicateRequestsBtn.appendChild(badge);
                         } else {
                             existingBadge.textContent = data.count;
                         }
                     } else {
-                        // Keep button disabled and in outline style
                         viewDuplicateRequestsBtn.disabled = true;
                         viewDuplicateRequestsBtn.classList.remove('btn-danger');
                         viewDuplicateRequestsBtn.classList.add('btn-outline-danger');
-                        // Remove count badge if exists
-                        const existingBadge = viewDuplicateRequestsBtn.querySelector('.badge');
-                        if (existingBadge) {
-                            existingBadge.remove();
-                        }
+                        const badge = viewDuplicateRequestsBtn.querySelector('.badge');
+                        if (badge) badge.remove();
                     }
                 } catch (error) {
-                    console.error('Error checking duplicate requests:', error);
+                    console.error('Error checking duplicates:', error);
                 }
             };
 
-            // --- Theme Management ---
-            const getStoredTheme = () => localStorage.getItem('theme');
-            const setStoredTheme = theme => localStorage.setItem('theme', theme);
+            // Render rule preview cards
+            const renderRules = () => {
+                const forwards = currentConfig.forwards || [];
+                rulesCount.textContent = forwards.length;
 
-            const applyTheme = (theme) => {
-                htmlEl.setAttribute('data-bs-theme', theme);
-                themeSwitcherBtn.innerHTML = theme === 'dark' ?
-                    '<i class="bi bi-moon-stars-fill"></i>' :
-                    '<i class="bi bi-sun-fill"></i>';
-
-                // Update iOS status bar and theme color
-                updateStatusBarForTheme(theme);
-            };
-
-            const updateStatusBarForTheme = (theme) => {
-                // Update theme-color meta tag for address bar and PWA status bar
-                let themeColorMeta = document.querySelector('meta[name="theme-color"]');
-                if (!themeColorMeta) {
-                    themeColorMeta = document.createElement('meta');
-                    themeColorMeta.name = 'theme-color';
-                    document.head.appendChild(themeColorMeta);
+                if (forwards.length === 0) {
+                    rulesContainer.innerHTML = '';
+                    rulesEmpty.style.display = 'block';
+                    return;
                 }
 
-                // Update apple-mobile-web-app-status-bar-style for PWA
-                let statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-                if (!statusBarMeta) {
-                    statusBarMeta = document.createElement('meta');
-                    statusBarMeta.name = 'apple-mobile-web-app-status-bar-style';
-                    document.head.appendChild(statusBarMeta);
-                }
+                rulesEmpty.style.display = 'none';
+                rulesContainer.innerHTML = forwards.map((rule, idx) => {
+                    const protocols = (rule.protocols || []).map(p => p.toLowerCase());
+                    const allowedIPs = rule.allowed_ips || [];
 
-                // For PWA mode, always use default to avoid overlap issues
-                if (theme === 'dark') {
-                    themeColorMeta.content = '#0a0e18';
-                    statusBarMeta.content = 'default';
-                } else {
-                    themeColorMeta.content = '#f8f9fa';
-                    statusBarMeta.content = 'default';
-                }
-            };
+                    const hasTcp = protocols.includes('tcp');
+                    const hasUdp = protocols.includes('udp');
 
-            // Theme is already set by inline script, just sync the UI
-            const currentTheme = htmlEl.getAttribute('data-bs-theme') || 'light';
-            themeSwitcherBtn.innerHTML = currentTheme === 'dark' ?
-                '<i class="bi bi-moon-stars-fill"></i>' :
-                '<i class="bi bi-sun-fill"></i>';
+                    let borderClass = 'rule-card-tcp';
+                    if (hasTcp && hasUdp) {
+                        borderClass = 'rule-card-both';
+                    } else if (hasUdp) {
+                        borderClass = 'rule-card-udp';
+                    }
 
-            // Initialize status bar on page load
-            updateStatusBarForTheme(currentTheme);
+                    const protoBadges = protocols.map(p => {
+                        if (p === 'tcp') {
+                            return '<span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle rounded-pill me-1"><i class="bi bi-diagram-3-fill me-1"></i>TCP</span>';
+                        }
+                        return '<span class="badge bg-info bg-opacity-10 text-info border border-info-subtle rounded-pill me-1"><i class="bi bi-lightning-charge-fill me-1"></i>UDP</span>';
+                    }).join('');
 
-            // Listen for system theme changes
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-                // Only auto-switch if user hasn't set a manual preference
-                const storedTheme = getStoredTheme();
-                if (!storedTheme) {
-                    const newTheme = e.matches ? 'dark' : 'light';
-                    applyTheme(newTheme);
-                    loadIPPool(); // Refresh IP pool display
-                }
-            });
+                    let allowedIpsHTML;
+                    if (allowedIPs.length === 0) {
+                        allowedIpsHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill fs-xs text-nowrap"><i class="bi bi-globe me-1"></i>Public (Any IP Allowed)</span>';
+                    } else {
+                        const maxVisible = 2;
+                        const visibleIPs = allowedIPs.slice(0, maxVisible);
+                        const hiddenCount = allowedIPs.length - maxVisible;
+                        const chips = visibleIPs.map(ip => `<code class="bg-body-tertiary px-2 py-0.5 rounded border text-body fs-xs font-monospace text-nowrap">${ip}</code>`).join('');
+                        const moreBadge = hiddenCount > 0 ? `<span class="badge bg-secondary-subtle text-secondary rounded-pill fs-xs text-nowrap">+${hiddenCount} more</span>` : '';
+                        allowedIpsHTML = `<span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill fs-xs text-nowrap me-1"><i class="bi bi-shield-check me-1"></i>${allowedIPs.length} Whitelisted</span>${chips}${moreBadge}`;
+                    }
 
-            themeSwitcherBtn.addEventListener('click', () => {
-                const currentTheme = htmlEl.getAttribute('data-bs-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                setStoredTheme(newTheme);
-                applyTheme(newTheme);
-                // 主题切换后刷新IP池显示以更新背景色
-                loadIPPool();
-            });
-
-            // --- Core Logic ---
-            const showToast = (message, isError = false) => {
-                toastBody.textContent = message;
-                toastEl.classList.remove('bg-success-subtle', 'text-success-emphasis', 'bg-danger-subtle',
-                    'text-danger-emphasis');
-                toastEl.classList.add(isError ? 'bg-danger-subtle' : 'bg-success-subtle', isError ?
-                    'text-danger-emphasis' : 'text-success-emphasis');
-                bsToast.show();
-            };
-
-            const renderRule = (rule, index) => {
-                const ruleWrapper = document.createElement('div');
-                ruleWrapper.className = 'col-12 rule-card-enter';
-
-                const ruleEl = document.createElement('div');
-                ruleEl.className = 'card rule shadow-sm';
-                ruleEl.dataset.index = index;
-
-                const protocols = rule.protocols || [];
-                const allowedIPs = rule.allowed_ips || [];
-
-                const ipListHTML = allowedIPs.map(ip => `
-                    <div class="input-group input-group-mobile mb-2">
-                        <input type="text" class="form-control rule-allowed-ip" value="${ip}" placeholder="e.g., 192.168.1.1">
-                        <button class="btn btn-outline-danger remove-ip-btn" type="button">
-                            <i class="bi bi-trash"></i>
-                            <span class="ms-1">Remove</span>
-                        </button>
-                    </div>
-                `).join('');
-
-                ruleEl.innerHTML = `
-                    <div class="card-body position-relative">
-                        <button type="button" class="btn btn-danger btn-delete" aria-label="Delete"><i class="bi bi-trash-fill"></i></button>
-                        <div class="row">
-                            <div class="col-12 mb-3">
-                                <label class="form-label fw-bold">Protocols</label>
-                                <div class="d-flex flex-wrap gap-3">
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input rule-proto-tcp" type="checkbox" value="tcp" ${protocols.includes('tcp') ? 'checked' : ''}>
-                                        <label class="form-check-label">TCP</label>
+                    return `
+                        <div class="col-12 col-xl-6 rule-card-enter">
+                            <div class="glass-card rule-card ${borderClass} p-3.5 p-md-4">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-secondary-subtle text-secondary rounded-pill font-monospace">Rule #${idx + 1}</span>
+                                        <div class="d-flex">${protoBadges}</div>
                                     </div>
-                                    <div class="form-check form-check-inline">
-                                        <input class="form-check-input rule-proto-udp" type="checkbox" value="udp" ${protocols.includes('udp') ? 'checked' : ''}>
-                                        <label class="form-check-label">UDP</label>
+                                    <div class="btn-action-group">
+                                        <button class="btn btn-action btn-outline-primary edit-rule-btn" data-index="${idx}" title="Edit Rule">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </button>
+                                        <button class="btn btn-action btn-outline-danger delete-rule-btn" data-index="${idx}" title="Delete Rule">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
                                     </div>
+                                </div>
+
+                                <div class="network-flow-box d-flex align-items-center justify-content-between mb-3">
+                                    <div class="overflow-hidden">
+                                        <div class="text-muted fs-xs text-uppercase fw-bold mb-0.5">Source</div>
+                                        <div class="font-monospace fw-bold fs-6 text-primary text-truncate">${rule.from || ''}</div>
+                                    </div>
+
+                                    <div class="px-3 text-center">
+                                        <i class="bi bi-arrow-right fs-5 text-muted opacity-50"></i>
+                                    </div>
+
+                                    <div class="overflow-hidden text-end">
+                                        <div class="text-muted fs-xs text-uppercase fw-bold mb-0.5">Destination</div>
+                                        <div class="font-monospace fw-bold fs-6 text-success text-truncate">${rule.to || ''}</div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-1.5 pt-1 text-nowrap overflow-hidden">
+                                    <span class="text-muted fs-xs fw-bold text-uppercase flex-shrink-0 me-1"><i class="bi bi-shield-lock me-1"></i>Access:</span>
+                                    <div class="d-flex align-items-center gap-1 text-nowrap overflow-hidden flex-nowrap flex-grow-1">${allowedIpsHTML}</div>
                                 </div>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-12 col-lg-6 mb-3">
-                                <label class="form-label fw-bold">Source (From)</label>
-                                <input type="text" class="form-control rule-from" value="${rule.from || ''}" placeholder="e.g., 0.0.0.0:8080">
-                            </div>
-                            <div class="col-12 col-lg-6 mb-3">
-                                <label class="form-label fw-bold">Destination (To)</label>
-                                <input type="text" class="form-control rule-to" value="${rule.to || ''}" placeholder="e.g., 127.0.0.1:80">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">
-                                Allowed IPs
-                                <span class="text-muted fw-normal">(Leave blank to allow all)</span>
-                            </label>
-                            <div class="allowed-ips-list">
-                                ${ipListHTML}
-                            </div>
-                            <button class="btn btn-outline-primary btn-sm mt-2 add-ip-btn" type="button">
-                                <i class="bi bi-plus-circle me-1"></i>
-                                Add IP
-                            </button>
-                        </div>
-                    </div>
-                `;
-                ruleWrapper.appendChild(ruleEl);
-                rulesContainer.appendChild(ruleWrapper);
+                    `;
+                }).join('');
             };
 
             const loadConfig = async () => {
@@ -1459,238 +1135,298 @@
                     const response = await fetch('/api/config');
                     if (!response.ok) throw new Error('Failed to load configuration.');
                     currentConfig = await response.json();
-                    rulesContainer.innerHTML = '';
-                    (currentConfig.forwards || []).forEach(renderRule);
+                    renderRules();
                 } catch (error) {
                     showToast(error.message, true);
                 }
             };
 
             const saveConfig = async () => {
-                const newForwards = [];
-                const ruleElements = document.querySelectorAll('.rule');
-                let hasError = false;
-                let errorMsg = '';
-
-                ruleElements.forEach(el => {
-                    const from = el.querySelector('.rule-from').value;
-                    const to = el.querySelector('.rule-to').value;
-                    if (!from || !to) {
-                        hasError = true;
-                        errorMsg = "Fields 'Source (From)' and 'Destination (To)' cannot be empty.";
-                    }
-
-                    const protocols = [];
-                    if (el.querySelector('.rule-proto-tcp').checked) protocols.push('tcp');
-                    if (el.querySelector('.rule-proto-udp').checked) protocols.push('udp');
-
-                    if (protocols.length === 0) {
-                        hasError = true;
-                        errorMsg = 'Each rule must have at least one protocol (TCP or UDP) selected.';
-                    }
-
-                    const allowed_ips = Array.from(el.querySelectorAll('.rule-allowed-ip')).map(input =>
-                        input.value.trim()).filter(ip => ip);
-                    newForwards.push({
-                        protocols,
-                        from,
-                        to,
-                        allowed_ips
-                    });
-                });
-
-                if (hasError) {
-                    showToast(errorMsg, true);
-                    return;
-                }
-
-                const newConfig = {
-                    admin_addr: currentConfig.admin_addr,
-                    basic_auth: currentConfig.basic_auth,
-                    temp_ip_pool_size: currentConfig.temp_ip_pool_size,
-                    forwards: newForwards
-                };
-
                 try {
-                    saveConfigBtn.disabled = true;
-                    saveConfigBtn.innerHTML =
-                        '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+                    const newConfig = {
+                        admin_addr: currentConfig.admin_addr,
+                        basic_auth: currentConfig.basic_auth,
+                        temp_ip_pool_size: currentConfig.temp_ip_pool_size || 10,
+                        forwards: currentConfig.forwards || []
+                    };
 
                     const response = await fetch('/api/config', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(newConfig)
                     });
                     const responseText = await response.text();
                     if (!response.ok) throw new Error(`Failed to save: ${responseText}`);
 
-                    showToast('Configuration saved and reloaded successfully!');
-                    currentConfig = newConfig;
-                    // Reload to reflect sorted order from backend if any
-                    loadConfig();
+                    showToast('Configuration saved and applied successfully!');
+                    await loadConfig();
                 } catch (error) {
                     showToast(error.message, true);
-                } finally {
-                    saveConfigBtn.disabled = false;
-                    saveConfigBtn.innerHTML =
-                        '<i class="bi bi-check-circle-fill me-2"></i>Save and Apply';
                 }
             };
 
-            addRuleBtn.addEventListener('click', () => renderRule({}, rulesContainer.children.length));
+            // Modal Dynamic IP Rows Helper
+            const addModalIpRow = (value = '') => {
+                const row = document.createElement('div');
+                row.className = 'd-flex gap-2 align-items-center modal-ip-row';
+                row.innerHTML = `
+                    <div class="input-group">
+                        <span class="input-group-text bg-body-tertiary border-end-0"><i class="bi bi-globe2 text-muted"></i></span>
+                        <input type="text" class="form-control font-monospace border-start-0 modal-allowed-ip-input" value="${value}" placeholder="e.g. 192.168.1.0/24 or 10.0.0.1">
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-action flex-shrink-0 remove-modal-ip-btn" title="Remove IP">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                `;
+                modalIpListContainer.appendChild(row);
+            };
 
-            rulesContainer.addEventListener('click', e => {
-                const ruleCard = e.target.closest('.col-12');
+            const modalProtoSelector = document.getElementById('modal-proto-selector');
+            const modalProtoError = document.getElementById('modal-proto-error');
 
-                if (e.target.closest('.btn-delete')) {
-                    if (confirm('Are you sure you want to delete this rule?')) {
-                        ruleCard.remove();
-                    }
-                } else if (e.target.closest('.add-ip-btn')) {
-                    const ipListContainer = e.target.closest('.mb-3').querySelector(
-                        '.allowed-ips-list');
-                    const newIpInputHTML = `
-                        <div class="input-group input-group-mobile mb-2">
-                            <input type="text" class="form-control rule-allowed-ip" placeholder="e.g., 192.168.1.1">
-                            <button class="btn btn-outline-danger remove-ip-btn" type="button">
-                                <i class="bi bi-trash"></i>
-                                <span class="ms-1">Remove</span>
-                            </button>
-                        </div>
-                    `;
-                    ipListContainer.insertAdjacentHTML('beforeend', newIpInputHTML);
-                } else if (e.target.closest('.remove-ip-btn')) {
-                    e.target.closest('.input-group').remove();
+            const updateModalSaveButtonState = () => {
+                const hasProtocol = modalProtoTcp.checked || modalProtoUdp.checked;
+                modalSaveRuleBtn.disabled = !hasProtocol;
+                if (!hasProtocol) {
+                    modalSaveRuleBtn.title = "Select at least one protocol (TCP or UDP)";
+                    if (modalProtoSelector) modalProtoSelector.classList.add('is-invalid-proto');
+                    if (modalProtoError) modalProtoError.style.display = 'block';
+                } else {
+                    modalSaveRuleBtn.title = "";
+                    if (modalProtoSelector) modalProtoSelector.classList.remove('is-invalid-proto');
+                    if (modalProtoError) modalProtoError.style.display = 'none';
                 }
-            });
+            };
 
-            saveConfigBtn.addEventListener('click', saveConfig);
+            modalProtoTcp.addEventListener('change', updateModalSaveButtonState);
+            modalProtoUdp.addEventListener('change', updateModalSaveButtonState);
 
-            allowMyIpBtn.addEventListener('click', async () => {
-                if (!confirm('Are you sure you want to add your IP range (/24) to all rules?')) {
+            // Open Modal for Add
+            const openAddRuleModal = () => {
+                modalRuleIndex.value = '-1';
+                ruleModalTitle.textContent = 'Add Forwarding Rule';
+                modalProtoTcp.checked = true;
+                modalProtoUdp.checked = true;
+                updateModalSaveButtonState();
+                modalRuleFrom.value = '';
+                modalRuleTo.value = '';
+                modalIpListContainer.innerHTML = '';
+                bsRuleModal.show();
+            };
+
+            // Open Modal for Edit
+            const openEditRuleModal = (idx) => {
+                const rule = currentConfig.forwards[idx];
+                if (!rule) return;
+                modalRuleIndex.value = idx;
+                ruleModalTitle.textContent = `Edit Rule #${idx + 1}`;
+                const protocols = rule.protocols || [];
+                modalProtoTcp.checked = protocols.includes('tcp');
+                modalProtoUdp.checked = protocols.includes('udp');
+                updateModalSaveButtonState();
+                modalRuleFrom.value = rule.from || '';
+                modalRuleTo.value = rule.to || '';
+
+                modalIpListContainer.innerHTML = '';
+                const allowedIPs = rule.allowed_ips || [];
+                allowedIPs.forEach(ip => addModalIpRow(ip));
+
+                bsRuleModal.show();
+            };
+
+            // Save Rule from Modal
+            modalSaveRuleBtn.addEventListener('click', async () => {
+                const protocols = [];
+                if (modalProtoTcp.checked) protocols.push('tcp');
+                if (modalProtoUdp.checked) protocols.push('udp');
+
+                if (protocols.length === 0) {
+                    if (modalProtoSelector) modalProtoSelector.classList.add('is-invalid-proto');
+                    if (modalProtoError) modalProtoError.style.display = 'block';
+                    showToast("At least one protocol (TCP or UDP) must be selected.", true);
+                    return;
+                }
+                updateModalSaveButtonState();
+
+                const from = modalRuleFrom.value.trim();
+                const to = modalRuleTo.value.trim();
+                if (!from || !to) {
+                    showToast("Source (From) and Destination (To) cannot be empty.", true);
                     return;
                 }
 
+                const allowed_ips = Array.from(modalIpListContainer.querySelectorAll('.modal-allowed-ip-input'))
+                    .map(input => input.value.trim())
+                    .filter(ip => ip !== '');
+
+                const newRule = { protocols, from, to, allowed_ips };
+                const idx = parseInt(modalRuleIndex.value, 10);
+
+                if (!currentConfig.forwards) currentConfig.forwards = [];
+
+                if (idx >= 0 && idx < currentConfig.forwards.length) {
+                    currentConfig.forwards[idx] = newRule;
+                } else {
+                    currentConfig.forwards.push(newRule);
+                }
+
+                bsRuleModal.hide();
+                renderRules();
+                await saveConfig();
+            });
+
+            // Modal IP list button handlers
+            modalAddIpRowBtn.addEventListener('click', () => addModalIpRow(''));
+
+            modalAddMyIpBtn.addEventListener('click', () => {
+                if (!currentClientIP) {
+                    showToast("Current IP not resolved yet.", true);
+                    return;
+                }
+                const existingInputs = Array.from(modalIpListContainer.querySelectorAll('.modal-allowed-ip-input')).map(i => i.value.trim());
+                if (!existingInputs.includes(currentClientIP)) {
+                    addModalIpRow(currentClientIP);
+                }
+            });
+
+            modalIpListContainer.addEventListener('click', (e) => {
+                if (e.target.closest('.remove-modal-ip-btn')) {
+                    e.target.closest('.modal-ip-row').remove();
+                }
+            });
+
+            // Event Listeners
+            addRuleBtn.addEventListener('click', openAddRuleModal);
+            emptyAddRuleBtn.addEventListener('click', openAddRuleModal);
+
+            rulesContainer.addEventListener('click', async (e) => {
+                const editBtn = e.target.closest('.edit-rule-btn');
+                const deleteBtn = e.target.closest('.delete-rule-btn');
+
+                if (editBtn) {
+                    const idx = parseInt(editBtn.dataset.index, 10);
+                    openEditRuleModal(idx);
+                } else if (deleteBtn) {
+                    const idx = parseInt(deleteBtn.dataset.index, 10);
+                    const confirmed = await showConfirmDialog({
+                        title: 'Delete Rule',
+                        message: `Are you sure you want to delete <strong>Rule #${idx + 1}</strong>?`,
+                        confirmText: 'Delete Rule',
+                        confirmBtnClass: 'btn-danger',
+                        iconClass: 'bi-trash3-fill text-danger',
+                        iconBgClass: 'bg-danger bg-opacity-10'
+                    });
+                    if (confirmed) {
+                        currentConfig.forwards.splice(idx, 1);
+                        renderRules();
+                        await saveConfig();
+                    }
+                }
+            });
+
+            allowMyIpBtn.addEventListener('click', async () => {
+                const confirmed = await showConfirmDialog({
+                    title: 'Allow IP Range',
+                    message: 'Are you sure you want to add your IP range (/24) to all rules?',
+                    confirmText: 'Allow Range',
+                    confirmBtnClass: 'btn-info text-white',
+                    iconClass: 'bi-person-check-fill text-info',
+                    iconBgClass: 'bg-info bg-opacity-10'
+                });
+                if (!confirmed) return;
                 try {
                     allowMyIpBtn.disabled = true;
-                    allowMyIpBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
-
-                    const response = await fetch('/api/allow-my-ip', {
-                        method: 'POST',
-                    });
-
-                    const responseText = await response.text();
-                    if (!response.ok) {
-                        throw new Error(`Failed to allow IP range: ${responseText}`);
-                    }
-
-                    showToast(responseText);
-                    loadConfig(); // Refresh the config to show the new IP
-                } catch (error) {
-                    showToast(error.message, true);
+                    allowMyIpBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+                    const response = await fetch('/api/allow-my-ip', { method: 'POST' });
+                    const text = await response.text();
+                    if (!response.ok) throw new Error(text);
+                    showToast(text);
+                    await loadConfig();
+                } catch (err) {
+                    showToast(err.message, true);
                 } finally {
                     allowMyIpBtn.disabled = false;
-                    allowMyIpBtn.innerHTML = '<i class="bi bi-person-check-fill me-2"></i>Allow My IP Range';
+                    allowMyIpBtn.innerHTML = '<i class="bi bi-person-check-fill me-1.5"></i>Allow My IP Range';
                 }
             });
 
             allowCurrentIpBtn.addEventListener('click', async () => {
-                if (!confirm('Are you sure you want to add your current IP to the temporary whitelist?')) {
-                    return;
-                }
-
+                const confirmed = await showConfirmDialog({
+                    title: 'Whitelist Current IP',
+                    message: 'Are you sure you want to add your current IP to the temporary whitelist?',
+                    confirmText: 'Allow IP',
+                    confirmBtnClass: 'btn-warning text-dark',
+                    iconClass: 'bi-shield-check text-warning',
+                    iconBgClass: 'bg-warning bg-opacity-10'
+                });
+                if (!confirmed) return;
                 try {
                     allowCurrentIpBtn.disabled = true;
-                    allowCurrentIpBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Adding...';
-
-                    const response = await fetch('/api/allow', {
-                        method: 'POST',
-                    });
-
-                    const responseText = await response.text();
-                    if (!response.ok) {
-                        throw new Error(`Failed to allow current IP: ${responseText}`);
-                    }
-
-                    showToast(responseText);
-                    loadIPPool(); // Refresh IP pool
-                } catch (error) {
-                    showToast(error.message, true);
+                    allowCurrentIpBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adding...';
+                    const response = await fetch('/api/allow', { method: 'POST' });
+                    const text = await response.text();
+                    if (!response.ok) throw new Error(text);
+                    showToast(text);
+                    await loadIPPool();
+                } catch (err) {
+                    showToast(err.message, true);
                 } finally {
                     allowCurrentIpBtn.disabled = false;
-                    allowCurrentIpBtn.innerHTML = '<i class="bi bi-shield-check me-2"></i>Allow Current IP';
+                    allowCurrentIpBtn.innerHTML = '<i class="bi bi-shield-check me-1.5"></i>Allow Current IP';
                 }
             });
 
-            refreshIpPoolBtn.addEventListener('click', () => {
-                loadIPPool();
-            });
+            viewDuplicateRequestsBtn.addEventListener('click', () => window.location.href = '/duplicates');
 
-            viewDuplicateRequestsBtn.addEventListener('click', () => {
-                window.location.href = '/duplicates';
-            });
-
-            // Logout functionality
             logoutBtn.addEventListener('click', async () => {
-                if (!confirm('Are you sure you want to logout?')) {
-                    return;
-                }
-
+                const confirmed = await showConfirmDialog({
+                    title: 'Confirm Logout',
+                    message: 'Are you sure you want to log out of Forward Admin?',
+                    confirmText: 'Logout',
+                    confirmBtnClass: 'btn-danger',
+                    iconClass: 'bi-box-arrow-right text-danger',
+                    iconBgClass: 'bg-danger bg-opacity-10'
+                });
+                if (!confirmed) return;
                 try {
-                    const response = await fetch('/api/logout', {
-                        method: 'POST'
-                    });
-
-                    if (response.ok) {
-                        // Redirect to login page
-                        window.location.href = '/login';
-                    } else {
-                        showToast('Logout failed. Please try again.', true);
-                    }
-                } catch (error) {
-                    showToast('Logout failed. Please try again.', true);
+                    const res = await fetch('/api/logout', { method: 'POST' });
+                    if (res.ok) window.location.href = '/login';
+                } catch (e) {
+                    showToast('Logout failed', true);
                 }
             });
 
-            // Handle temporary IP removal
             document.addEventListener('click', async (e) => {
-                if (e.target.closest('.remove-temp-ip-btn')) {
-                    const btn = e.target.closest('.remove-temp-ip-btn');
+                const btn = e.target.closest('.remove-temp-ip-btn');
+                if (btn) {
                     const ip = btn.dataset.ip;
-
-                    if (!confirm(`Are you sure you want to remove ${ip} from the temporary whitelist?`)) {
-                        return;
-                    }
-
+                    const confirmed = await showConfirmDialog({
+                        title: 'Remove Temporary IP',
+                        message: `Are you sure you want to remove <strong>${ip}</strong> from temporary whitelist?`,
+                        confirmText: 'Remove IP',
+                        confirmBtnClass: 'btn-danger',
+                        iconClass: 'bi-trash-fill text-danger',
+                        iconBgClass: 'bg-danger bg-opacity-10'
+                    });
+                    if (!confirmed) return;
                     try {
                         btn.disabled = true;
-                        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-                        const response = await fetch(`/api/remove-temp-ip`, {
+                        const res = await fetch('/api/remove-temp-ip', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ ip: ip })
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ip })
                         });
-
-                        const responseText = await response.text();
-                        if (!response.ok) {
-                            throw new Error(`Failed to remove IP: ${responseText}`);
-                        }
-
-                        showToast(responseText);
-                        loadIPPool(); // Refresh IP pool display
-                    } catch (error) {
-                        showToast(error.message, true);
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="bi bi-trash"></i>';
+                        const text = await res.text();
+                        if (!res.ok) throw new Error(text);
+                        showToast(text);
+                        await loadIPPool();
+                    } catch (err) {
+                        showToast(err.message, true);
                     }
                 }
             });
 
+            // Initial loads
             loadConfig();
             fetchAndDisplayIP();
             loadIPPool();
